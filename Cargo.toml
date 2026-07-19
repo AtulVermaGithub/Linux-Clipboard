@@ -1,0 +1,60 @@
+[package]
+name = "linux-clipboard"
+version = "0.1.0"
+authors = ["Antigravity"]
+edition = "2021"
+description = "A native Clipboard History Manager for Linux built with Slint and Rust"
+
+[dependencies]
+# UI Framework
+slint = { version = "1.9", features = ["compat-1-2"] }
+i-slint-backend-winit = "1.9"
+
+# Clipboard Integration
+arboard = { version = "3.4", features = ["image-data", "wayland-data-control"] }
+
+# SQLite database
+rusqlite = { version = "0.32", features = ["bundled"] }
+
+# Async runtime
+tokio = { version = "1.38", features = ["full"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Image processing for screenshot clips
+image = "0.25"
+png = "0.17"
+base64 = "0.22"
+
+
+# Utilities
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1.8", features = ["v4", "serde"] }
+dirs = "5.0"
+once_cell = "1.19"
+parking_lot = "0.12"
+percent-encoding = "2.3"
+
+# Low-level system integrations
+x11rb = { version = "0.13", features = ["allow-unsafe-code", "xtest"] }
+libc = "0.2"
+
+# DBus integration (for theme changes and system desktop notifications)
+zbus = { version = "4", default-features = false, features = ["tokio"] }
+futures-lite = "2"
+
+# System Tray support
+tray-icon = "0.19"
+gtk = "0.18"
+
+
+[build-dependencies]
+slint-build = "1.9"
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true
+opt-level = "z"
