@@ -45,6 +45,14 @@ check_architecture() {
     fi
 }
 
+run_with_tty() {
+    if [ -c /dev/tty ]; then
+        "$@" </dev/tty
+    else
+        "$@"
+    fi
+}
+
 check_root_or_sudo() {
     if [ "$EUID" -eq 0 ]; then
         SUDO_CMD=""
@@ -53,8 +61,10 @@ check_root_or_sudo() {
         if command -v sudo &>/dev/null; then
             SUDO_CMD="sudo"
             TARGET_USER="$USER"
-            log "Requesting administrator (sudo) authentication..."
-            sudo -v </dev/tty 2>/dev/null || true
+            if [ -c /dev/tty ]; then
+                log "Requesting administrator (sudo) authentication..."
+                sudo -v </dev/tty 2>/dev/null || true
+            fi
         else
             echo -e "${RED}[ERR ]${RESET} 'sudo' command not found. Please run this script as root or install sudo."
             exit 1
@@ -155,8 +165,8 @@ install_deb() {
     download_package "$DEB_FILE" "deb" "$TMP_DEB"
 
     log "Installing system dependencies and package..."
-    DEBIAN_FRONTEND=noninteractive $SUDO_CMD apt-get install -y "$TMP_DEB" </dev/tty || \
-    (DEBIAN_FRONTEND=noninteractive $SUDO_CMD dpkg -i "$TMP_DEB" </dev/tty && DEBIAN_FRONTEND=noninteractive $SUDO_CMD apt-get install -f -y </dev/tty)
+    run_with_tty env DEBIAN_FRONTEND=noninteractive $SUDO_CMD apt-get install -y "$TMP_DEB" || \
+    (run_with_tty env DEBIAN_FRONTEND=noninteractive $SUDO_CMD dpkg -i "$TMP_DEB" && run_with_tty env DEBIAN_FRONTEND=noninteractive $SUDO_CMD apt-get install -f -y)
 
     rm -f "$TMP_DEB"
 }
@@ -169,8 +179,8 @@ install_arch() {
     download_package "$PKG_FILE" "arch" "$TMP_PKG"
 
     log "Installing with pacman..."
-    $SUDO_CMD pacman -Sy --needed --noconfirm xdotool gtk3 </dev/tty 2>/dev/null || true
-    $SUDO_CMD pacman -U --noconfirm "$TMP_PKG" </dev/tty
+    run_with_tty $SUDO_CMD pacman -Sy --needed --noconfirm xdotool gtk3 2>/dev/null || true
+    run_with_tty $SUDO_CMD pacman -U --noconfirm "$TMP_PKG"
 
     rm -f "$TMP_PKG"
 }
@@ -184,9 +194,9 @@ install_rpm() {
 
     log "Installing with dnf/rpm..."
     if command -v dnf &>/dev/null; then
-        $SUDO_CMD dnf install -y "$TMP_RPM" </dev/tty
+        run_with_tty $SUDO_CMD dnf install -y "$TMP_RPM"
     else
-        $SUDO_CMD rpm -Uvh --nodeps "$TMP_RPM" </dev/tty
+        run_with_tty $SUDO_CMD rpm -Uvh --nodeps "$TMP_RPM"
     fi
 
     rm -f "$TMP_RPM"
