@@ -16,7 +16,7 @@ RESET='\033[0m'
 
 APP_NAME="lincb.ople.in"
 PKG_NAME="lincb.ople.in"
-VERSION="0.0.1"
+VERSION="0.0.2"
 ARCH="amd64"
 ARCH_LINUX="x86_64"
 DESCRIPTION="A native Clipboard History Manager for Linux, built with Rust and Slint"
@@ -60,11 +60,17 @@ compile() {
         log "Using cargo-zigbuild targeting universal GLIBC 2.17 baseline..."
         cargo zigbuild --release --target x86_64-unknown-linux-gnu.2.17
         mkdir -p target/release
-        cp -f "target/x86_64-unknown-linux-gnu.2.17/release/$PKG_NAME" "$BINARY" 2>/dev/null || true
+        local FOUND_BIN="$(find target -type f -name "lincb-ople-in" -not -path "*/deps/*" -not -path "*/build/*" | head -1)"
+        if [ -n "$FOUND_BIN" ]; then
+            cp -f "$FOUND_BIN" "$BINARY"
+        fi
     else
         log "Compiling standard release build..."
         cargo build --release
-        cp -f "target/release/$PKG_NAME" "$BINARY" 2>/dev/null || true
+        local FOUND_BIN="$(find target -type f -name "lincb-ople-in" -not -path "*/deps/*" -not -path "*/build/*" | head -1)"
+        if [ -n "$FOUND_BIN" ]; then
+            cp -f "$FOUND_BIN" "$BINARY"
+        fi
     fi
 
     [ -f "$BINARY" ] || err "Binary not found at $BINARY after compilation!"
@@ -333,6 +339,8 @@ Summary:        ${DESCRIPTION}
 License:        ${LICENSE}
 URL:            ${HOMEPAGE}
 BuildArch:      x86_64
+
+%global __requires_exclude ^libm\\.so\\.6\\(GLIBC_
 
 Requires:       gtk3
 Requires:       glib2

@@ -8,7 +8,7 @@
 
 set -e
 
-DEFAULT_VERSION="0.0.1"
+DEFAULT_VERSION="0.0.2"
 APP_NAME="lincb.ople.in"
 PKG_NAME="lincb.ople.in"
 GITHUB_REPO="AtulVermaGithub/Linux-Clipboard"
@@ -220,6 +220,7 @@ setup_permissions_and_autostart() {
     log "Configuring udev permissions & autostart..."
 
     # 1. udev rules for uinput access without root
+    $SUDO_CMD mkdir -p /etc/udev/rules.d 2>/dev/null || true
     echo 'KERNEL=="uinput", GROUP="input", MODE="0660"' | $SUDO_CMD tee /etc/udev/rules.d/99-lincb-uinput.rules >/dev/null
     $SUDO_CMD modprobe uinput 2>/dev/null || true
     $SUDO_CMD udevadm control --reload-rules 2>/dev/null || true
