@@ -24,8 +24,9 @@ RESET='\033[0m'
 print_banner() {
     echo -e "${CYAN}"
     echo '  ╔══════════════════════════════════════════════════════════════════╗'
-    echo '  ║                     lincb.ople.in Installer                      ║'
+    echo '  ║                     Linux-Clipboard Installer                    ║'
     echo '  ║       Native Windows 11-style Clipboard History for Linux        ║'
+    echo '  ║                           by Ople.in                             ║'
     echo '  ╚══════════════════════════════════════════════════════════════════╝'
     echo -e "${RESET}"
 }
@@ -52,6 +53,8 @@ check_root_or_sudo() {
         if command -v sudo &>/dev/null; then
             SUDO_CMD="sudo"
             TARGET_USER="$USER"
+            log "Requesting administrator (sudo) authentication..."
+            sudo -v </dev/tty 2>/dev/null || true
         else
             echo -e "${RED}[ERR ]${RESET} 'sudo' command not found. Please run this script as root or install sudo."
             exit 1
@@ -152,9 +155,8 @@ install_deb() {
     download_package "$DEB_FILE" "deb" "$TMP_DEB"
 
     log "Installing system dependencies and package..."
-    $SUDO_CMD apt-get update -qq || true
-    $SUDO_CMD apt-get install -y -qq "$TMP_DEB" 2>/dev/null || \
-    ($SUDO_CMD dpkg -i "$TMP_DEB" && $SUDO_CMD apt-get install -f -y -qq)
+    DEBIAN_FRONTEND=noninteractive $SUDO_CMD apt-get install -y "$TMP_DEB" </dev/tty || \
+    (DEBIAN_FRONTEND=noninteractive $SUDO_CMD dpkg -i "$TMP_DEB" </dev/tty && DEBIAN_FRONTEND=noninteractive $SUDO_CMD apt-get install -f -y </dev/tty)
 
     rm -f "$TMP_DEB"
 }
@@ -167,8 +169,8 @@ install_arch() {
     download_package "$PKG_FILE" "arch" "$TMP_PKG"
 
     log "Installing with pacman..."
-    $SUDO_CMD pacman -Sy --needed --noconfirm xdotool gtk3 2>/dev/null || true
-    $SUDO_CMD pacman -U --noconfirm "$TMP_PKG"
+    $SUDO_CMD pacman -Sy --needed --noconfirm xdotool gtk3 </dev/tty 2>/dev/null || true
+    $SUDO_CMD pacman -U --noconfirm "$TMP_PKG" </dev/tty
 
     rm -f "$TMP_PKG"
 }
@@ -182,9 +184,9 @@ install_rpm() {
 
     log "Installing with dnf/rpm..."
     if command -v dnf &>/dev/null; then
-        $SUDO_CMD dnf install -y "$TMP_RPM"
+        $SUDO_CMD dnf install -y "$TMP_RPM" </dev/tty
     else
-        $SUDO_CMD rpm -Uvh --nodeps "$TMP_RPM"
+        $SUDO_CMD rpm -Uvh --nodeps "$TMP_RPM" </dev/tty
     fi
 
     rm -f "$TMP_RPM"
@@ -221,7 +223,7 @@ setup_permissions_and_autostart() {
 
     # 1. udev rules for uinput access without root
     $SUDO_CMD mkdir -p /etc/udev/rules.d 2>/dev/null || true
-    echo 'KERNEL=="uinput", GROUP="input", MODE="0660"' | $SUDO_CMD tee /etc/udev/rules.d/99-lincb-uinput.rules >/dev/null
+    echo 'KERNEL=="uinput", MODE="0666", TAG+="uaccess"' | $SUDO_CMD tee /etc/udev/rules.d/99-lincb-uinput.rules >/dev/null
     $SUDO_CMD modprobe uinput 2>/dev/null || true
     $SUDO_CMD udevadm control --reload-rules 2>/dev/null || true
     $SUDO_CMD udevadm trigger 2>/dev/null || true

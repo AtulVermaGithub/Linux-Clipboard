@@ -115,7 +115,7 @@ EOF
        "$PKG_DIR/etc/xdg/autostart/${APP_NAME}.desktop"
 
     # udev rule
-    echo 'KERNEL=="uinput", GROUP="input", MODE="0660"' \
+    echo 'KERNEL=="uinput", MODE="0666", TAG+="uaccess"' \
         > "$PKG_DIR/usr/lib/udev/rules.d/99-lincb-uinput.rules"
 
     # DEBIAN/control
@@ -126,7 +126,7 @@ Version: ${VERSION}
 Architecture: amd64
 Maintainer: ${MAINTAINER}
 Installed-Size: ${INSTALLED_SIZE}
-Depends: libgtk-3-0, libglib2.0-0, libc6 (>= 2.17), xdotool, libxdo3
+Depends: libgtk-3-0, libglib2.0-0, libc6 (>= 2.17), xdotool
 Section: utils
 Priority: optional
 Homepage: ${HOMEPAGE}
@@ -140,7 +140,6 @@ EOF
     cat > "$PKG_DIR/DEBIAN/postinst" << 'EOF'
 #!/bin/sh
 set -e
-# Add current user to input group for uinput access
 if [ "$1" = "configure" ]; then
     modprobe uinput 2>/dev/null || true
     udevadm control --reload-rules 2>/dev/null || true
@@ -149,7 +148,6 @@ if [ "$1" = "configure" ]; then
         usermod -aG input "$SUDO_USER" 2>/dev/null || true
     fi
 fi
-# Update icon cache
 if command -v gtk-update-icon-cache >/dev/null 2>&1; then
     gtk-update-icon-cache -f -t /usr/share/icons/hicolor 2>/dev/null || true
 fi
@@ -160,7 +158,7 @@ EOF
     cat > "$PKG_DIR/DEBIAN/prerm" << 'EOF'
 #!/bin/sh
 set -e
-pkill -f "lincb.ople.in" 2>/dev/null || true
+pkill -x "lincb.ople.in" 2>/dev/null || true
 EOF
     chmod 755 "$PKG_DIR/DEBIAN/prerm"
 
