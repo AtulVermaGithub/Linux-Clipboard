@@ -87,11 +87,27 @@ get_latest_version() {
     fi
 }
 
+is_valid_package() {
+    local file="$1"
+    [ -s "$file" ] || return 1
+    if head -n 5 "$file" 2>/dev/null | grep -iq "<html\|<!DOCTYPE html\|404: Not Found\|401: Unauthorized"; then
+        return 1
+    fi
+    return 0
+}
+
 # ─── Step 3: Helper Functions for Dynamic Package Downloads ─────────────────
 download_package() {
     local filename="$1"
     local subpath="$2" # e.g. "deb" or "arch" or "rpm" or "tarball"
     local dest="$3"
+
+    # Local fallback if testing directly in project directory
+    if [ -f "releases/${subpath}/${filename}" ]; then
+        log "Using local package file: releases/${subpath}/${filename}"
+        cp "releases/${subpath}/${filename}" "$dest"
+        return 0
+    fi
 
     # URL 1: GitHub /releases/latest/download redirect (Always latest release file)
     local url1="https://github.com/${GITHUB_REPO}/releases/latest/download/${filename}"
@@ -116,18 +132,15 @@ download_package() {
     fi
 
     log "Downloading ${filename} (v${VERSION})..."
-    if $fetch_cmd "$url1" > "$dest" 2>/dev/null && [ -s "$dest" ]; then
-        return 0
-    elif $fetch_cmd "$url2" > "$dest" 2>/dev/null && [ -s "$dest" ]; then
-        return 0
-    elif $fetch_cmd "$url3" > "$dest" 2>/dev/null && [ -s "$dest" ]; then
-        return 0
-    elif $fetch_cmd "$url4" > "$dest" 2>/dev/null && [ -s "$dest" ]; then
-        return 0
-    else
-        echo -e "${RED}[ERR ]${RESET} Could not download ${filename} from GitHub releases."
-        exit 1
-    fi
+    for url in "$url1" "$url2" "$url3" "$url4"; do
+        if $fetch_cmd "$url" > "$dest" 2>/dev/null && is_valid_package "$dest"; then
+            return 0
+        fi
+    done
+
+    echo -e "${RED}[ERR ]${RESET} Could not download valid package file (${filename})."
+    echo -e "${YELLOW}[HINT]${RESET} Because your GitHub repository is currently PRIVATE, release files cannot be downloaded over public URL until published."
+    exit 1
 }
 
 # ─── Step 4: Package-Manager Specific Installation ────────────────────────────
@@ -237,28 +250,34 @@ main() {
     VERSION="$(get_latest_version)"
     log "Target version: ${BOLD}v${VERSION}${RESET}"
 
+    local installed=0
     case "$DISTRO_ID" in
         ubuntu|debian|pop|linuxmint|elementary|raspbian|kali)
-            install_deb || install_tarball_generic
+            install_deb && installed=1 || install_tarball_generic && installed=1
             ;;
         arch|manjaro|endeavouros|garuda|artix)
-            install_arch || install_tarball_generic
+            install_arch && installed=1 || install_tarball_generic && installed=1
             ;;
         fedora|rhel|centos|rocky|almalinux|opensuse*)
-            install_rpm || install_tarball_generic
+            install_rpm && installed=1 || install_tarball_generic && installed=1
             ;;
         *)
             if [[ "$DISTRO_LIKE" == *"debian"* ]] || [[ "$DISTRO_LIKE" == *"ubuntu"* ]]; then
-                install_deb || install_tarball_generic
+                install_deb && installed=1 || install_tarball_generic && installed=1
             elif [[ "$DISTRO_LIKE" == *"arch"* ]]; then
-                install_arch || install_tarball_generic
+                install_arch && installed=1 || install_tarball_generic && installed=1
             elif [[ "$DISTRO_LIKE" == *"fedora"* ]] || [[ "$DISTRO_LIKE" == *"rhel"* ]]; then
-                install_rpm || install_tarball_generic
+                install_rpm && installed=1 || install_tarball_generic && installed=1
             else
-                install_tarball_generic
+                install_tarball_generic && installed=1
             fi
             ;;
     esac
+
+    if [ "$installed" -ne 1 ]; then
+        echo -e "${RED}[ERR ]${RESET} Installation failed."
+        exit 1
+    fi
 
     setup_permissions_and_autostart
 
