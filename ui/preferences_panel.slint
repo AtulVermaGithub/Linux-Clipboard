@@ -1,0 +1,124 @@
+// linux-clipboard PreferencesPanel component
+// Displays settings interface for theme mode selector.
+
+export component PreferencesPanel inherits VerticalLayout {
+    // State properties
+    in-out property <string> theme-mode;
+
+    // Styling properties passed from parent
+    in property <color> text-color;
+    in property <color> text-secondary;
+    in property <color> card-bg;
+    in property <color> card-hover-bg;
+    in property <color> border-color;
+    in property <color> accent-color;
+
+    // Callbacks
+    callback change-theme(string);
+
+    spacing: 12px;
+    padding: 8px;
+    alignment: start;
+
+    Text {
+        text: "⚙️ Preferences";
+        font-size: 14px;
+        font-weight: 700;
+        color: text-color;
+    }
+
+    // Theme selector container
+    Rectangle {
+        background: card-bg;
+        border-radius: 8px;
+        border-width: 1px;
+        border-color: border-color;
+        
+        VerticalLayout {
+            padding: 12px;
+            spacing: 10px;
+
+            HorizontalLayout {
+                alignment: space-between;
+                
+                VerticalLayout {
+                    spacing: 2px;
+                    Text {
+                        text: "App Theme";
+                        font-size: 13px;
+                        font-weight: 600;
+                        color: text-color;
+                    }
+                    Text {
+                        text: "Choose your preferred color theme mode.";
+                        font-size: 11px;
+                        color: text-secondary;
+                    }
+                }
+            }
+
+            // Theme button group
+            HorizontalLayout {
+                spacing: 8px;
+                height: 32px;
+                
+                // Auto (System)
+                TouchArea {
+                    clicked => { change-theme("system"); }
+                    Rectangle {
+                        background: theme-mode == "system" ? accent-color : card-hover-bg;
+                        border-radius: 6px;
+                        border-width: 1px;
+                        border-color: theme-mode == "system" ? accent-color : border-color;
+                        Text {
+                            text: "💻 Auto";
+                            color: theme-mode == "system" ? #ffffff : text-color;
+                            font-size: 12px;
+                            font-weight: 600;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
+
+                // Dark
+                TouchArea {
+                    clicked => { change-theme("dark"); }
+                    Rectangle {
+                        background: theme-mode == "dark" ? accent-color : card-hover-bg;
+                        border-radius: 6px;
+                        border-width: 1px;
+                        border-color: theme-mode == "dark" ? accent-color : border-color;
+                        Text {
+                            text: "🌙 Dark";
+                            color: theme-mode == "dark" ? #ffffff : text-color;
+                            font-size: 12px;
+                            font-weight: 600;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
+
+                // Light
+                TouchArea {
+                    clicked => { change-theme("light"); }
+                    Rectangle {
+                        background: theme-mode == "light" ? accent-color : card-hover-bg;
+                        border-radius: 6px;
+                        border-width: 1px;
+                        border-color: theme-mode == "light" ? accent-color : border-color;
+                        Text {
+                            text: "☀️ Light";
+                            color: theme-mode == "light" ? #ffffff : text-color;
+                            font-size: 12px;
+                            font-weight: 600;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

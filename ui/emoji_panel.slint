@@ -1,0 +1,233 @@
+// linux-clipboard EmojiPanel component
+// Displays categorized emoji picker grid.
+
+import { ScrollView } from "std-widgets.slint";
+import { SlintEmojiRow } from "./types.slint";
+
+export component EmojiPanel inherits VerticalLayout {
+    // State properties
+    in-out property <int> active-emoji-category;
+    in property <[SlintEmojiRow]> emoji-rows;
+
+    // Styling properties passed from parent
+    in property <color> card-bg;
+    in property <color> card-hover-bg;
+    in property <color> border-color;
+    in property <color> accent-color;
+
+    // Callbacks
+    callback emoji-category-changed(int);
+    callback record-emoji(string);
+
+    spacing: 8px;
+    
+    // Categories Bar
+    HorizontalLayout {
+        height: 36px;
+        spacing: 4px;
+        padding-left: 6px;
+        padding-right: 6px;
+        alignment: center;
+        
+        // Category 0: Smileys
+        TouchArea {
+            width: 32px;
+            height: 32px;
+            clicked => { active-emoji-category = 0; emoji-category-changed(0); }
+            Rectangle {
+                background: active-emoji-category == 0 ? card-hover-bg : transparent;
+                border-radius: 6px;
+                border-width: active-emoji-category == 0 ? 1px : 0px;
+                border-color: accent-color;
+                Text {
+                    text: "😀";
+                    font-size: 16px;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+            }
+        }
+        // Category 1: People
+        TouchArea {
+            width: 32px;
+            height: 32px;
+            clicked => { active-emoji-category = 1; emoji-category-changed(1); }
+            Rectangle {
+                background: active-emoji-category == 1 ? card-hover-bg : transparent;
+                border-radius: 6px;
+                border-width: active-emoji-category == 1 ? 1px : 0px;
+                border-color: accent-color;
+                Text {
+                    text: "👋";
+                    font-size: 16px;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+            }
+        }
+        // Category 2: Animals
+        TouchArea {
+            width: 32px;
+            height: 32px;
+            clicked => { active-emoji-category = 2; emoji-category-changed(2); }
+            Rectangle {
+                background: active-emoji-category == 2 ? card-hover-bg : transparent;
+                border-radius: 6px;
+                border-width: active-emoji-category == 2 ? 1px : 0px;
+                border-color: accent-color;
+                Text {
+                    text: "🐱";
+                    font-size: 16px;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+            }
+        }
+        // Category 3: Food
+        TouchArea {
+            width: 32px;
+            height: 32px;
+            clicked => { active-emoji-category = 3; emoji-category-changed(3); }
+            Rectangle {
+                background: active-emoji-category == 3 ? card-hover-bg : transparent;
+                border-radius: 6px;
+                border-width: active-emoji-category == 3 ? 1px : 0px;
+                border-color: accent-color;
+                Text {
+                    text: "🍔";
+                    font-size: 16px;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+            }
+        }
+        // Category 4: Activities
+        TouchArea {
+            width: 32px;
+            height: 32px;
+            clicked => { active-emoji-category = 4; emoji-category-changed(4); }
+            Rectangle {
+                background: active-emoji-category == 4 ? card-hover-bg : transparent;
+                border-radius: 6px;
+                border-width: active-emoji-category == 4 ? 1px : 0px;
+                border-color: accent-color;
+                Text {
+                    text: "⚽";
+                    font-size: 16px;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+            }
+        }
+        // Category 5: Travel
+        TouchArea {
+            width: 32px;
+            height: 32px;
+            clicked => { active-emoji-category = 5; emoji-category-changed(5); }
+            Rectangle {
+                background: active-emoji-category == 5 ? card-hover-bg : transparent;
+                border-radius: 6px;
+                border-width: active-emoji-category == 5 ? 1px : 0px;
+                border-color: accent-color;
+                Text {
+                    text: "✈️";
+                    font-size: 16px;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+            }
+        }
+        // Category 6: Objects
+        TouchArea {
+            width: 32px;
+            height: 32px;
+            clicked => { active-emoji-category = 6; emoji-category-changed(6); }
+            Rectangle {
+                background: active-emoji-category == 6 ? card-hover-bg : transparent;
+                border-radius: 6px;
+                border-width: active-emoji-category == 6 ? 1px : 0px;
+                border-color: accent-color;
+                Text {
+                    text: "💡";
+                    font-size: 16px;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+            }
+        }
+        // Category 7: Symbols
+        TouchArea {
+            width: 32px;
+            height: 32px;
+            clicked => { active-emoji-category = 7; emoji-category-changed(7); }
+            Rectangle {
+                background: active-emoji-category == 7 ? card-hover-bg : transparent;
+                border-radius: 6px;
+                border-width: active-emoji-category == 7 ? 1px : 0px;
+                border-color: accent-color;
+                Text {
+                    text: "❤️";
+                    font-size: 16px;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+            }
+        }
+        // Category 8: Flags
+        TouchArea {
+            width: 32px;
+            height: 32px;
+            clicked => { active-emoji-category = 8; emoji-category-changed(8); }
+            Rectangle {
+                background: active-emoji-category == 8 ? card-hover-bg : transparent;
+                border-radius: 6px;
+                border-width: active-emoji-category == 8 ? 1px : 0px;
+                border-color: accent-color;
+                Text {
+                    text: "🏁";
+                    font-size: 16px;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+            }
+        }
+    }
+    
+    ScrollView {
+        viewport-height: emoji-rows.length * 52px;
+        
+        VerticalLayout {
+            padding: 8px;
+            spacing: 8px;
+            alignment: start;
+            
+            for row in emoji_rows : HorizontalLayout {
+                spacing: 8px;
+                alignment: start;
+                
+                for emoji in row.cols : TouchArea {
+                    width: 44px;
+                    height: 44px;
+                    clicked => {
+                        record-emoji(emoji.character);
+                    }
+                    
+                    Rectangle {
+                        background: parent.has-hover ? card-hover-bg : card-bg;
+                        border-radius: 6px;
+                        border-width: 1px;
+                        border-color: border-color;
+                        
+                        Text {
+                            text: emoji.character;
+                            font-size: 20px;
+                            font-family: "Noto Color Emoji";
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

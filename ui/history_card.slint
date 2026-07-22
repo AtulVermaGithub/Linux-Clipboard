@@ -1,0 +1,102 @@
+// linux-clipboard HistoryCard component
+// Renders individual clipboard history items (text/rich text preview, images, pin/delete actions).
+
+import { SlintClipItem } from "./types.slint";
+
+export component HistoryCard inherits TouchArea {
+    in-out property <SlintClipItem> item;
+    in-out property <bool> is-selected;
+    
+    // Theme colors passed from parent
+    in property <color> bg-color;
+    in property <color> border-color;
+    in property <color> text-color;
+    in property <color> text-secondary;
+    in property <color> accent-color;
+    in property <color> card-bg;
+    in property <color> card-hover-bg;
+    in property <color> pinned-bg;
+    
+    // Callbacks
+    callback paste-item(string);
+    callback toggle-pin(string);
+    callback delete-item(string);
+
+    height: 70px;
+    clicked => { paste-item(item.id); }
+
+    Rectangle {
+        clip: true;
+        background: is-selected ? card-hover-bg : (parent.has-hover ? card-hover-bg : (item.pinned ? pinned-bg : card-bg));
+        border-radius: 8px;
+        border-width: is-selected ? 1.5px : 1px;
+        border-color: is-selected ? accent-color : border-color;
+        
+        HorizontalLayout {
+            padding: 8px;
+            spacing: 8px;
+            
+            if (item.item_type == "Image") : Image {
+                source: item.image;
+                width: 80px;
+                height: 54px;
+                image-fit: contain;
+            }
+            
+            VerticalLayout {
+                alignment: center;
+                
+                // Preview text/snippet content
+                Text {
+                    text: item.preview;
+                    font-size: 13px;
+                    color: text-color;
+                    overflow: elide;
+                    max-height: 34px;
+                }
+
+                Text {
+                    text: item.timestamp_str;
+                    font-size: 10px;
+                    color: text-secondary;
+                }
+            }
+           
+            // Row Action buttons (Pin & Delete)
+            VerticalLayout {
+                alignment: center;
+                HorizontalLayout {
+                    alignment: end;
+                    spacing: 6px;
+                    width: 50px;
+                    
+                    // Pin Button
+                    TouchArea {
+                        width: 20px;
+                        height: 20px;
+                        clicked => { toggle-pin(item.id); }
+                        Text {
+                            text: item.pinned ? "📌" : "📍";
+                            font-size: 12px;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                    }
+
+                    // Delete Button
+                    TouchArea {
+                        width: 20px;
+                        height: 20px;
+                        clicked => { delete-item(item.id); }
+                        Text {
+                            text: "❌";
+                            font-size: 10px;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

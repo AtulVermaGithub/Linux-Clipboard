@@ -1,0 +1,22 @@
+// linux-clipboard types definition file
+// Defines the core data structures shared across UI components.
+
+export struct SlintClipItem {
+    id: string,
+    item_type: string,    // "Text", "RichText", "Image"
+    plain_text: string,
+    timestamp_str: string,
+    pinned: bool,
+    preview: string,
+    image_base64: string, // Only loaded if type is Image
+    image: image,
+}
+
+export struct SlintEmojiItem {
+    character: string,
+    description: string,
+}
+
+export struct SlintEmojiRow {
+    cols: [SlintEmojiItem],
+}

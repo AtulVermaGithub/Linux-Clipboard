@@ -1,4 +1,4 @@
-# linux-clipboard Makefile
+# lincb.ople.in Makefile
 # Automates compiling, installing, and configuring permissions
 
 PREFIX ?= /usr/local
@@ -6,8 +6,9 @@ BINDIR := $(PREFIX)/bin
 DATADIR := $(PREFIX)/share
 DESTDIR ?=
 
-APP_NAME := linux-clipboard
-DESKTOP_FILE := linux-clipboard.desktop
+APP_NAME := lincb.ople.in
+CARGO_BIN := lincb-ople-in
+DESKTOP_FILE := lincb.ople.in.desktop
 
 .PHONY: all build install uninstall clean install-rules add-user-group
 
@@ -15,6 +16,7 @@ all: build
 
 build:
 	cargo build --release
+	cp target/release/$(CARGO_BIN) target/release/$(APP_NAME)
 
 install-rules:
 	@echo "Configuring udev permissions for /dev/uinput..."
@@ -29,7 +31,7 @@ add-user-group:
 	@if [ -n "$$SUDO_USER" ]; then \
 		sudo usermod -aG input $$SUDO_USER; \
 		echo "✓ Added $$SUDO_USER to input group"; \
-	else \
+		else \
 		sudo usermod -aG input $$USER; \
 		echo "✓ Added $$USER to input group"; \
 	fi
@@ -54,7 +56,7 @@ install:
 	echo 'Type=Application' >> $(DESTDIR)$(DATADIR)/applications/$(DESKTOP_FILE)
 	echo 'Categories=Utility;Application;' >> $(DESTDIR)$(DATADIR)/applications/$(DESKTOP_FILE)
 	echo 'StartupNotify=false' >> $(DESTDIR)$(DATADIR)/applications/$(DESKTOP_FILE)
-	echo 'StartupWMClass=linux-clipboard' >> $(DESTDIR)$(DATADIR)/applications/$(DESKTOP_FILE)
+	echo 'StartupWMClass=lincb.ople.in' >> $(DESTDIR)$(DATADIR)/applications/$(DESKTOP_FILE)
 	chmod 644 $(DESTDIR)$(DATADIR)/applications/$(DESKTOP_FILE)
 
 	@# Configure autostart

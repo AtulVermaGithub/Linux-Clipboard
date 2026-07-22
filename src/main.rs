@@ -1,6 +1,6 @@
-//! Main entry point for the linux-clipboard application
+//! Main entry point for the linux-clipboard application.
 //! Sets up the Tokio runtime, handles single-instance check, initializes SQLite,
-//! starts the clipboard watcher, and runs the Slint GUI.
+//! starts the clipboard watcher, and runs the Slint GUI event loop.
 
 slint::include_modules!();
 
@@ -10,124 +10,24 @@ use std::sync::Arc;
 use std::time::Duration;
 use parking_lot::Mutex;
 use rusqlite::Connection;
-use slint::{ComponentHandle, ModelRc, VecModel};
-use tokio::net::{UnixListener, UnixStream};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use base64::Engine;
+use slint::ComponentHandle;
 
 mod config;
 mod backend;
 mod ui;
 
 use backend::db::{ClipboardItem, ClipboardContent};
+use backend::theme::is_system_dark_mode;
+use backend::ipc::{handle_single_instance, spawn_ipc_listener};
+use ui::helpers::{refresh_clips, refresh_emojis};
 
-const APP_NAME: &str = "linux-clipboard";
-
-// Emojis are populated dynamically using the `emojis` crate
+const APP_NAME: &str = "lincb.ople.in";
 
 /// Helper to resolve configurations directory
 fn get_config_dir() -> PathBuf {
     dirs::config_dir()
         .unwrap_or_else(|| PathBuf::from("."))
         .join(APP_NAME)
-}
-
-fn is_system_dark_mode() -> bool {
-    // 1. Try DBus Desktop portal (standard on modern Linux)
-    if let Ok(output) = std::process::Command::new("dbus-send")
-        .args(&[
-            "--print-reply",
-            "--dest=org.freedesktop.portal.Desktop",
-            "/org/freedesktop/portal/desktop",
-            "org.freedesktop.portal.Settings.Read",
-            "string:org.freedesktop.appearance",
-            "string:color-scheme",
-        ])
-        .output()
-    {
-        if output.status.success() {
-            let res = String::from_utf8_lossy(&output.stdout).trim().to_lowercase();
-            if res.contains("uint32 1") {
-                return true;
-            } else if res.contains("uint32 2") || res.contains("uint32 0") {
-                return false;
-            }
-        }
-    }
-
-    // 2. Try busctl call org.freedesktop.portal.Desktop /org/freedesktop/portal/desktop org.freedesktop.portal.Settings Read ss org.freedesktop.appearance color-scheme
-    if let Ok(output) = std::process::Command::new("busctl")
-        .args(&[
-            "call",
-            "org.freedesktop.portal.Desktop",
-            "/org/freedesktop/portal/desktop",
-            "org.freedesktop.portal.Settings",
-            "Read",
-            "ss",
-            "org.freedesktop.appearance",
-            "color-scheme",
-        ])
-        .output()
-    {
-        if output.status.success() {
-            let res = String::from_utf8_lossy(&output.stdout).trim().to_lowercase();
-            if res.contains(" 1") {
-                return true;
-            } else if res.contains(" 2") || res.contains(" 0") {
-                return false;
-            }
-        }
-    }
-
-    // 3. Try running `gsettings get org.gnome.desktop.interface color-scheme`
-    if let Ok(output) = std::process::Command::new("gsettings")
-        .args(&["get", "org.gnome.desktop.interface", "color-scheme"])
-        .output()
-    {
-        if output.status.success() {
-            let res = String::from_utf8_lossy(&output.stdout).trim().to_lowercase();
-            if res.contains("dark") {
-                return true;
-            } else if res.contains("light") {
-                return false;
-            }
-        }
-    }
-
-    // 4. Try checking org.gnome.desktop.interface gtk-theme
-    if let Ok(output) = std::process::Command::new("gsettings")
-        .args(&["get", "org.gnome.desktop.interface", "gtk-theme"])
-        .output()
-    {
-        if output.status.success() {
-            let res = String::from_utf8_lossy(&output.stdout).trim().to_lowercase();
-            if res.contains("dark") {
-                return true;
-            } else if res.contains("light") {
-                return false;
-            }
-        }
-    }
-
-    // 5. Fallback: check KDE configuration file: ~/.config/kdeglobals
-    if let Ok(home) = std::env::var("HOME") {
-        let kde_globals = std::path::Path::new(&home).join(".config/kdeglobals");
-        if kde_globals.exists() {
-            if let Ok(content) = std::fs::read_to_string(kde_globals) {
-                for line in content.lines() {
-                    if line.to_lowercase().contains("colorscheme=") {
-                        if line.to_lowercase().contains("dark") {
-                            return true;
-                        } else if line.to_lowercase().contains("light") {
-                            return false;
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    false // Default fallback is light mode
 }
 
 #[tokio::main]
@@ -137,22 +37,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let sock_path = config_dir.join("ipc.sock");
 
     // Single-instance check
-    if sock_path.exists() {
-        if let Ok(mut stream) = UnixStream::connect(&sock_path).await {
-            // Another instance is running! Write command line and exit.
-            let cmd = if args.contains(&"--emoji".to_string()) {
-                "emoji"
-            } else if args.contains(&"--settings".to_string()) {
-                "settings"
-            } else {
-                "toggle"
-            };
-            let _ = stream.write_all(cmd.as_bytes()).await;
-            return Ok(());
-        } else {
-            // Stale socket, remove it
-            let _ = fs::remove_file(&sock_path);
-        }
+    if handle_single_instance(&sock_path, &args).await? {
+        return Ok(());
     }
 
     // Initialize GTK for the system tray
@@ -211,6 +97,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     app.set_is_dark(initial_is_dark);
     app.set_theme_mode(settings.theme_mode.clone().into());
     app.set_show_setup(is_first_run);
+    
     // Check if --emoji flag is present on startup
     if args.contains(&"--emoji".to_string()) {
         app.set_active_tab(1);
@@ -231,47 +118,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     ui::window::position_window(&app);
 
     // Spawn IPC socket listener in background
-    let app_weak_ipc = app_weak.clone();
-    let sock_path_clone = sock_path.clone();
-    tokio::spawn(async move {
-        if let Ok(listener) = UnixListener::bind(&sock_path_clone) {
-            loop {
-                if let Ok((mut stream, _)) = listener.accept().await {
-                    let app_weak_clone = app_weak_ipc.clone();
-                    tokio::spawn(async move {
-                        let mut buf = [0u8; 32];
-                        if let Ok(n) = stream.read(&mut buf).await {
-                            let cmd = String::from_utf8_lossy(&buf[..n]);
-                            let cmd_str = cmd.trim().to_string();
-                            
-                            // Wake up UI loop
-                            slint::invoke_from_event_loop(move || {
-                                if let Some(app) = app_weak_clone.upgrade() {
-                                     if app.window().is_visible() && cmd_str == "toggle" {
-                                         let _ = app.window().hide();
-                                         app.invoke_reset_state();
-                                     } else {
-                                        // Update active tab based on commands
-                                        if cmd_str == "emoji" {
-                                            app.set_active_tab(1);
-                                            app.set_search_placeholder("Search emojis...".into());
-                                        } else {
-                                            app.set_active_tab(0);
-                                            app.set_search_placeholder("Search history...".into());
-                                        }
-                                         app.set_selected_index(0);
-                                         backend::simulator::save_focused_window();
-                                         ui::window::position_window(&app);
-                                         let _ = app.window().show();
-                                     }
-                                }
-                            }).ok();
-                        }
-                    });
-                }
-            }
-        }
-    });
+    spawn_ipc_listener(&sock_path, app_weak.clone());
 
     // Start background clipboard watcher
     let app_weak_watcher = app_weak.clone();
@@ -431,131 +278,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// Helper to decode base64 PNG into a Slint image
-fn load_slint_image_from_base64(base64_str: &str) -> Option<slint::Image> {
-    let png_bytes = base64::prelude::BASE64_STANDARD.decode(base64_str).ok()?;
-    let decoder = png::Decoder::new(std::io::Cursor::new(png_bytes));
-    let mut reader = decoder.read_info().ok()?;
-    let mut buf = vec![0; reader.output_buffer_size()];
-    let info = reader.next_frame(&mut buf).ok()?;
-    let bytes = &buf[..info.buffer_size()];
-    
-    let buffer = slint::SharedPixelBuffer::<slint::Rgba8Pixel>::clone_from_slice(
-        bytes,
-        info.width,
-        info.height,
-    );
-    Some(slint::Image::from_rgba8(buffer))
-}
-
-/// Refreshes the Slint UI with history items from SQLite
-fn refresh_clips(app_weak: slint::Weak<AppWindow>, conn: Arc<Mutex<Connection>>, search_text: String) {
-    if let Some(app) = app_weak.upgrade() {
-        let db = conn.lock();
-        if let Ok(history) = backend::db::get_history(&db) {
-            let filter = search_text.to_lowercase();
-            let items: Vec<SlintClipItem> = history
-                .into_iter()
-                .filter(|item| {
-                    if filter.is_empty() {
-                        true
-                    } else {
-                        item.preview.to_lowercase().contains(&filter)
-                    }
-                })
-                .map(|item| {
-                    let ts_local = item.timestamp.with_timezone(&chrono::Local);
-                    let ts_str = ts_local.format("%Y-%m-%d %H:%M:%S").to_string();
-                    
-                    let (item_type, plain_text, b64) = match item.content {
-                        ClipboardContent::Text(text) => ("Text", text, String::new()),
-                        ClipboardContent::RichText { plain, .. } => ("RichText", plain, String::new()),
-                        ClipboardContent::Image { base64, .. } => ("Image", String::new(), base64),
-                    };
-
-                    let slint_img = if item_type == "Image" && !b64.is_empty() {
-                        load_slint_image_from_base64(&b64).unwrap_or_default()
-                    } else {
-                        slint::Image::default()
-                    };
-
-                    SlintClipItem {
-                        id: item.id.into(),
-                        item_type: item_type.into(),
-                        plain_text: plain_text.into(),
-                        timestamp_str: ts_str.into(),
-                        pinned: item.pinned,
-                        preview: item.preview.into(),
-                        image_base64: b64.into(),
-                        image: slint_img,
-                    }
-                })
-                .collect();
-            
-            app.set_clips(ModelRc::new(VecModel::from(items)));
-            app.set_selected_index(0);
-        }
-    }
-}
-
-fn refresh_emojis(app_weak: slint::Weak<AppWindow>, category_idx: i32, search_text: String) {
-    if let Some(app) = app_weak.upgrade() {
-        let filter = search_text.to_lowercase();
-        
-        let emoji_iter = if !filter.is_empty() {
-            // Search across all emojis
-            emojis::iter()
-                .filter(|e| {
-                    e.name().to_lowercase().contains(&filter) ||
-                    e.shortcode().map(|s| s.to_lowercase().contains(&filter)).unwrap_or(false)
-                })
-                .collect::<Vec<_>>()
-        } else {
-            // Map category index to emojis::Group
-            let group_opt = match category_idx {
-                0 => Some(emojis::Group::SmileysAndEmotion),
-                1 => Some(emojis::Group::PeopleAndBody),
-                2 => Some(emojis::Group::AnimalsAndNature),
-                3 => Some(emojis::Group::FoodAndDrink),
-                4 => Some(emojis::Group::Activities),
-                5 => Some(emojis::Group::TravelAndPlaces),
-                6 => Some(emojis::Group::Objects),
-                7 => Some(emojis::Group::Symbols),
-                8 => Some(emojis::Group::Flags),
-                _ => None,
-            };
-
-            if let Some(group) = group_opt {
-                group.emojis().collect::<Vec<_>>()
-            } else {
-                emojis::Group::SmileysAndEmotion.emojis().collect::<Vec<_>>()
-            }
-        };
-
-        let mut emoji_rows: Vec<SlintEmojiRow> = Vec::new();
-        let mut current_row = Vec::new();
-
-        for emoji in emoji_iter {
-            current_row.push(SlintEmojiItem {
-                character: emoji.as_str().into(),
-                description: emoji.name().into(),
-            });
-            if current_row.len() == 6 {
-                emoji_rows.push(SlintEmojiRow {
-                    cols: ModelRc::new(VecModel::from(current_row)),
-                });
-                current_row = Vec::new();
-            }
-        }
-        if !current_row.is_empty() {
-            emoji_rows.push(SlintEmojiRow {
-                cols: ModelRc::new(VecModel::from(current_row)),
-            });
-        }
-        app.set_emoji_rows(ModelRc::new(VecModel::from(emoji_rows)));
-    }
-}
-
 /// Sets up the Slint component callbacks
 fn setup_callbacks(
     app: &AppWindow,
@@ -584,47 +306,47 @@ fn setup_callbacks(
                 app.invoke_reset_state();
             }
 
-                // Spawn background thread for focus restore + clipboard + paste
-                // This lets the Slint event loop process the window hide first
-                std::thread::spawn(move || {
-                    // Wait for the window to actually hide and compositor to process it
-                    std::thread::sleep(std::time::Duration::from_millis(150));
+            // Spawn background thread for focus restore + clipboard + paste
+            // This lets the Slint event loop process the window hide first
+            std::thread::spawn(move || {
+                // Wait for the window to actually hide and compositor to process it
+                std::thread::sleep(std::time::Duration::from_millis(150));
 
-                    // Restore active window focus and verify it settled
-                    match backend::simulator::restore_focused_window() {
-                        Ok(true) => {
-                            // Focus settled successfully
-                        }
-                        _ => {
-                            // Focus restoration could not be verified in time - sleep a bit extra to be safe
-                            std::thread::sleep(std::time::Duration::from_millis(100));
-                        }
+                // Restore active window focus and verify it settled
+                match backend::simulator::restore_focused_window() {
+                    Ok(true) => {
+                        // Focus settled successfully
                     }
-
-                    // Set clipboard robustly
-                    match &content {
-                        ClipboardContent::Text(text) => {
-                            let _ = backend::clipboard::set_text_robust(text);
-                        }
-                        ClipboardContent::RichText { plain, html } => {
-                            let _ = backend::clipboard::set_html_robust(html, plain);
-                        }
-                        ClipboardContent::Image { base64, width, height } => {
-                            let _ = backend::clipboard::set_image_robust(base64, *width, *height);
-                        }
+                    _ => {
+                        // Focus restoration could not be verified in time - sleep a bit extra to be safe
+                        std::thread::sleep(std::time::Duration::from_millis(100));
                     }
+                }
 
-                    // Wait for clipboard to settle
-                    std::thread::sleep(std::time::Duration::from_millis(60));
-
-                    // Simulate paste
-                    if let Err(e) = backend::simulator::simulate_paste_keystroke() {
-                        eprintln!("[Main] Paste simulation failed: {}", e);
+                // Set clipboard robustly
+                match &content {
+                    ClipboardContent::Text(text) => {
+                        let _ = backend::clipboard::set_text_robust(text);
                     }
+                    ClipboardContent::RichText { plain, html } => {
+                        let _ = backend::clipboard::set_html_robust(html, plain);
+                    }
+                    ClipboardContent::Image { base64, width, height } => {
+                        let _ = backend::clipboard::set_image_robust(base64, *width, *height);
+                    }
+                }
 
-                    // Post-paste delay to let target app read clipboard
-                    std::thread::sleep(std::time::Duration::from_millis(250));
-                });
+                // Wait for clipboard to settle
+                std::thread::sleep(std::time::Duration::from_millis(60));
+
+                // Simulate paste
+                if let Err(e) = backend::simulator::simulate_paste_keystroke() {
+                    eprintln!("[Main] Paste simulation failed: {}", e);
+                }
+
+                // Post-paste delay to let target app read clipboard
+                std::thread::sleep(std::time::Duration::from_millis(250));
+            });
         }
     });
 
@@ -730,12 +452,6 @@ fn setup_callbacks(
             // Post-paste delay
             std::thread::sleep(std::time::Duration::from_millis(250));
         });
-    });
-
-    // 7. Open Settings
-    app.on_open_settings(move || {
-        // Dynamic opening placeholder
-        eprintln!("[UI] Settings window triggered");
     });
 
     // 8. Close Window

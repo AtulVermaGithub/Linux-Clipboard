@@ -1,0 +1,12 @@
+# Linux Clipboard History — robots.txt
+# https://lincb.ople.in/
+
+# Allow all crawlers full access
+User-agent: *
+Allow: /
+
+# Block access to raw install script from indexing (still accessible, just not indexed)
+Disallow: /install.sh
+
+# Sitemap location — submit this URL to Google Search Console
+Sitemap: https://lincb.ople.in/sitemap.xml

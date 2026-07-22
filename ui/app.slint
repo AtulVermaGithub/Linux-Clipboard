@@ -3,25 +3,11 @@
 
 import { ScrollView } from "std-widgets.slint";
 
-export struct SlintClipItem {
-    id: string,
-    item_type: string,    // "Text", "RichText", "Image"
-    plain_text: string,
-    timestamp_str: string,
-    pinned: bool,
-    preview: string,
-    image_base64: string, // Only loaded if type is Image
-    image: image,
-}
-
-export struct SlintEmojiItem {
-    character: string,
-    description: string,
-}
-
-export struct SlintEmojiRow {
-    cols: [SlintEmojiItem],
-}
+import { SlintClipItem, SlintEmojiItem, SlintEmojiRow } from "./types.slint";
+import { HistoryCard } from "./history_card.slint";
+import { SetupView } from "./setup_view.slint";
+import { EmojiPanel } from "./emoji_panel.slint";
+import { PreferencesPanel } from "./preferences_panel.slint";
 
 export component AppWindow inherits Window {
     // Window properties
@@ -40,7 +26,6 @@ export component AppWindow inherits Window {
     callback record-emoji(string);       // emoji char
     callback search-changed(string);     // search text
     callback emoji-category-changed(int); // category index
-    callback open-settings();
     callback change-theme(string);
     callback close-window();
     callback check-shortcuts();
@@ -119,253 +104,19 @@ export component AppWindow inherits Window {
             border-color: border-color;
             clip: true;
 
-            if (show-setup) : VerticalLayout {
-                padding: 18px;
-                spacing: 16px;
-                alignment: center;
+            if (show-setup) : SetupView {
+                setup-step <=> root.setup-step;
+                shortcut-status <=> root.shortcut-status;
+                shortcut-details <=> root.shortcut-details;
+                text-color: root.text-color;
+                text-secondary: root.text-secondary;
+                accent-color: root.accent-color;
+                card-bg: root.card-bg;
+                border-color: root.border-color;
                 
-                Text {
-                    text: "Linux Clipboard Setup";
-                    font-size: 18px;
-                    font-weight: 700;
-                    color: text-color;
-                    horizontal-alignment: center;
-                }
-
-                // SCREEN 0: Welcome & Initial Detect
-                if (setup-step == 0) : VerticalLayout {
-                    spacing: 14px;
-                    Text {
-                        text: "Configure global hotkeys so you can access your clipboard history instantly at any time.";
-                        font-size: 12px;
-                        color: text-secondary;
-                        wrap: word-wrap;
-                        horizontal-alignment: center;
-                    }
-                    Text {
-                        text: "Default Hotkey: Super + V";
-                        font-size: 13px;
-                        font-weight: 600;
-                        color: accent-color;
-                        horizontal-alignment: center;
-                    }
-                    TouchArea {
-                        height: 38px;
-                        clicked => {
-                            root.check-shortcuts();
-                        }
-                        Rectangle {
-                            background: accent-color;
-                            border-radius: 6px;
-                            Text {
-                                text: "Check Hotkey Availability";
-                                color: #ffffff;
-                                font-weight: 600;
-                                horizontal-alignment: center;
-                                vertical-alignment: center;
-                            }
-                        }
-                    }
-                }
-
-                // SCREEN 1: Checking, Conflict, or Success Details
-                if (setup-step == 1) : VerticalLayout {
-                    spacing: 14px;
-                    
-                    if (shortcut-status == "checking") : VerticalLayout {
-                        alignment: center;
-                        spacing: 8px;
-                        Text {
-                            text: "Scanning system shortcuts...";
-                            font-size: 13px;
-                            color: text-color;
-                            horizontal-alignment: center;
-                        }
-                    }
-
-                    if (shortcut-status == "conflict") : VerticalLayout {
-                        spacing: 12px;
-                        Text {
-                            text: "⚠️ Hotkey Conflict Detected!";
-                            font-size: 13px;
-                            font-weight: 600;
-                            color: #d83b01; // Red warning color
-                            horizontal-alignment: center;
-                        }
-                        Rectangle {
-                            background: card-bg;
-                            border-radius: 6px;
-                            border-width: 1px;
-                            border-color: border-color;
-                            VerticalLayout {
-                                padding: 10px;
-                                spacing: 4px;
-                                Text {
-                                    text: "Super+V is currently registered to:";
-                                    font-size: 11px;
-                                    color: text-secondary;
-                                    horizontal-alignment: center;
-                                }
-                                Text {
-                                    text: shortcut-details;
-                                    font-size: 12px;
-                                    font-weight: 700;
-                                    color: text-color;
-                                    horizontal-alignment: center;
-                                    wrap: word-wrap;
-                                }
-                            }
-                        }
-                        Text {
-                            text: "Clicking 'Resolve & Fix' will disable the conflicting shortcut and bind Super+V to Linux Clipboard.";
-                            font-size: 11px;
-                            color: text-secondary;
-                            wrap: word-wrap;
-                            horizontal-alignment: center;
-                        }
-                        TouchArea {
-                            height: 38px;
-                            clicked => {
-                                root.fix-shortcuts();
-                            }
-                            Rectangle {
-                                background: accent-color;
-                                border-radius: 6px;
-                                Text {
-                                    text: "Resolve & Fix Shortcut";
-                                    color: #ffffff;
-                                    font-weight: 600;
-                                    horizontal-alignment: center;
-                                    vertical-alignment: center;
-                                }
-                            }
-                        }
-                    }
-
-                    if (shortcut-status == "ok") : VerticalLayout {
-                        spacing: 12px;
-                        Text {
-                            text: "✓ Hotkeys Configured Successfully!";
-                            font-size: 13px;
-                            font-weight: 600;
-                            color: #107c41; // Green color
-                            horizontal-alignment: center;
-                        }
-                        Text {
-                            text: "Super + V is now active for Clipboard History.\nSuper + . is active for Emojis.";
-                            font-size: 12px;
-                            color: text-secondary;
-                            horizontal-alignment: center;
-                        }
-                        TouchArea {
-                            height: 38px;
-                            clicked => {
-                                root.finish-setup();
-                            }
-                            Rectangle {
-                                background: #107c41;
-                                border-radius: 6px;
-                                Text {
-                                    text: "Start Using Clipboard";
-                                    color: #ffffff;
-                                    font-weight: 600;
-                                    horizontal-alignment: center;
-                                    vertical-alignment: center;
-                                }
-                            }
-                        }
-                    }
-
-                    if (shortcut-status == "failed") : VerticalLayout {
-                        spacing: 12px;
-                        Text {
-                            text: "❌ Auto-configuration Failed";
-                            font-size: 13px;
-                            font-weight: 600;
-                            color: #d83b01;
-                            horizontal-alignment: center;
-                        }
-                        Text {
-                            text: "We could not automatically bind the hotkeys on your current desktop configuration.";
-                            font-size: 12px;
-                            color: text-secondary;
-                            wrap: word-wrap;
-                            horizontal-alignment: center;
-                        }
-                        TouchArea {
-                            height: 38px;
-                            clicked => {
-                                setup-step = 2;
-                            }
-                            Rectangle {
-                                background: accent-color;
-                                border-radius: 6px;
-                                Text {
-                                    text: "Show Manual Setup Guide";
-                                    color: #ffffff;
-                                    font-weight: 600;
-                                    horizontal-alignment: center;
-                                    vertical-alignment: center;
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // SCREEN 2: Manual Instructions
-                if (setup-step == 2) : VerticalLayout {
-                    spacing: 12px;
-                    Text {
-                        text: "Manual Hotkey Configuration";
-                        font-size: 13px;
-                        font-weight: 600;
-                        color: text-color;
-                        horizontal-alignment: center;
-                    }
-                    Rectangle {
-                        background: card-bg;
-                        border-radius: 6px;
-                        border-width: 1px;
-                        border-color: border-color;
-                        VerticalLayout {
-                            padding: 10px;
-                            spacing: 6px;
-                            Text {
-                                text: "1. Open your desktop Settings -> Keyboard Shortcuts.";
-                                font-size: 11px;
-                                color: text-color;
-                            }
-                            Text {
-                                text: "2. Add a Custom Shortcut:";
-                                font-size: 11px;
-                                color: text-color;
-                                font-weight: 600;
-                            }
-                            Text {
-                                text: "   • Name: Linux Clipboard\n   • Command: linux-clipboard\n   • Shortcut: Super + V";
-                                font-size: 11px;
-                                color: text-color;
-                            }
-                        }
-                    }
-                    TouchArea {
-                        height: 38px;
-                        clicked => {
-                            root.finish-setup();
-                        }
-                        Rectangle {
-                            background: accent-color;
-                            border-radius: 6px;
-                            Text {
-                                text: "Completed - Open Clipboard";
-                                color: #ffffff;
-                                font-weight: 600;
-                                horizontal-alignment: center;
-                                vertical-alignment: center;
-                            }
-                        }
-                    }
-                }
+                check-shortcuts() => { root.check-shortcuts(); }
+                fix-shortcuts() => { root.fix-shortcuts(); }
+                finish-setup() => { root.finish-setup(); }
             }
 
             if (!show-setup) : VerticalLayout {
@@ -669,412 +420,49 @@ export component AppWindow inherits Window {
                                  }
                              }
 
-                             TouchArea {
-                                 height: 70px;
-                                 clicked => { root.paste-item(clip.id); }
-     
-                                 Rectangle {
-                                     clip: true;
-                                     background: (root.selected_index == idx) ? card-hover-bg : (parent.has-hover ? card-hover-bg : (clip.pinned ? pinned-bg : card-bg));
-                                     border-radius: 8px;
-                                     border-width: (root.selected_index == idx) ? 1.5px : 1px;
-                                     border-color: (root.selected_index == idx) ? accent-color : border-color;
-                                     
-                                     HorizontalLayout {
-                                         padding: 8px;
-                                         spacing: 8px;
-                                         
-                                         if (clip.item_type == "Image") : Image {
-                                             source: clip.image;
-                                             width: 80px;
-                                             height: 54px;
-                                             image-fit: contain;
-                                         }
-                                         
-                                         VerticalLayout {
-                                             alignment: center;
-                                             
-                                             // Preview text/snippet content
-                                             Text {
-                                                 text: clip.preview;
-                                                 font-size: 13px;
-                                                 color: text-color;
-                                                 overflow: elide;
-                                                 max-height: 34px;
-                                             }
-     
-                                             Text {
-                                                 text: clip.timestamp_str;
-                                                 font-size: 10px;
-                                                 color: text-secondary;
-                                             }
-                                         }
-                                        
-                                        // Row Action buttons (Pin & Delete)
-                                        VerticalLayout {
-                                            alignment: center;
-                                            HorizontalLayout {
-                                                alignment: end;
-                                                spacing: 6px;
-                                                width: 50px;
-                                                
-                                                // Pin Button
-                                                TouchArea {
-                                                    width: 20px;
-                                                    height: 20px;
-                                                    clicked => { root.toggle-pin(clip.id); }
-                                                    Text {
-                                                        text: clip.pinned ? "📌" : "📍";
-                                                        font-size: 12px;
-                                                        horizontal-alignment: center;
-                                                        vertical-alignment: center;
-                                                    }
-                                                }
-    
-                                                // Delete Button
-                                                TouchArea {
-                                                    width: 20px;
-                                                    height: 20px;
-                                                    clicked => { root.delete-item(clip.id); }
-                                                    Text {
-                                                        text: "❌";
-                                                        font-size: 10px;
-                                                        horizontal-alignment: center;
-                                                        vertical-alignment: center;
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+                             HistoryCard {
+                                 item: clip;
+                                 is-selected: root.selected_index == idx;
+                                 bg-color: root.bg-color;
+                                 border-color: root.border-color;
+                                 text-color: root.text-color;
+                                 text-secondary: root.text-secondary;
+                                 accent-color: root.accent-color;
+                                 card-bg: root.card-bg;
+                                 card-hover-bg: root.card-hover-bg;
+                                 pinned-bg: root.pinned-bg;
+                                 
+                                 paste-item(id) => { root.paste-item(id); }
+                                 toggle-pin(id) => { root.toggle-pin(id); }
+                                 delete-item(id) => { root.delete-item(id); }
+                             }
+                         }
+                     }
+                 }
+                 if (active-tab == 1) : EmojiPanel {
+                     active-emoji-category <=> root.active-emoji-category;
+                     emoji-rows: root.emoji-rows;
+                     card-bg: root.card-bg;
+                     card-hover-bg: root.card-hover-bg;
+                     border-color: root.border-color;
+                     accent-color: root.accent-color;
+                     
+                     emoji-category-changed(cat) => { root.emoji-category-changed(cat); }
+                     record-emoji(emoji) => { root.record-emoji(emoji); }
+                 }
 
-                if (active-tab == 1) : VerticalLayout {
-                    spacing: 8px;
-                    
-                    // Categories Bar
-                    HorizontalLayout {
-                        height: 36px;
-                        spacing: 4px;
-                        padding-left: 6px;
-                        padding-right: 6px;
-                        alignment: center;
-                        
-                        // Category 0: Smileys
-                        TouchArea {
-                            width: 32px;
-                            height: 32px;
-                            clicked => { root.active-emoji-category = 0; root.emoji-category-changed(0); }
-                            Rectangle {
-                                background: root.active-emoji-category == 0 ? card-hover-bg : transparent;
-                                border-radius: 6px;
-                                border-width: root.active-emoji-category == 0 ? 1px : 0px;
-                                border-color: accent-color;
-                                Text {
-                                    text: "😀";
-                                    font-size: 16px;
-                                    horizontal-alignment: center;
-                                    vertical-alignment: center;
-                                }
-                            }
-                        }
-                        // Category 1: People
-                        TouchArea {
-                            width: 32px;
-                            height: 32px;
-                            clicked => { root.active-emoji-category = 1; root.emoji-category-changed(1); }
-                            Rectangle {
-                                background: root.active-emoji-category == 1 ? card-hover-bg : transparent;
-                                border-radius: 6px;
-                                border-width: root.active-emoji-category == 1 ? 1px : 0px;
-                                border-color: accent-color;
-                                Text {
-                                    text: "👋";
-                                    font-size: 16px;
-                                    horizontal-alignment: center;
-                                    vertical-alignment: center;
-                                }
-                            }
-                        }
-                        // Category 2: Animals
-                        TouchArea {
-                            width: 32px;
-                            height: 32px;
-                            clicked => { root.active-emoji-category = 2; root.emoji-category-changed(2); }
-                            Rectangle {
-                                background: root.active-emoji-category == 2 ? card-hover-bg : transparent;
-                                border-radius: 6px;
-                                border-width: root.active-emoji-category == 2 ? 1px : 0px;
-                                border-color: accent-color;
-                                Text {
-                                    text: "🐱";
-                                    font-size: 16px;
-                                    horizontal-alignment: center;
-                                    vertical-alignment: center;
-                                }
-                            }
-                        }
-                        // Category 3: Food
-                        TouchArea {
-                            width: 32px;
-                            height: 32px;
-                            clicked => { root.active-emoji-category = 3; root.emoji-category-changed(3); }
-                            Rectangle {
-                                background: root.active-emoji-category == 3 ? card-hover-bg : transparent;
-                                border-radius: 6px;
-                                border-width: root.active-emoji-category == 3 ? 1px : 0px;
-                                border-color: accent-color;
-                                Text {
-                                    text: "🍔";
-                                    font-size: 16px;
-                                    horizontal-alignment: center;
-                                    vertical-alignment: center;
-                                }
-                            }
-                        }
-                        // Category 4: Activities
-                        TouchArea {
-                            width: 32px;
-                            height: 32px;
-                            clicked => { root.active-emoji-category = 4; root.emoji-category-changed(4); }
-                            Rectangle {
-                                background: root.active-emoji-category == 4 ? card-hover-bg : transparent;
-                                border-radius: 6px;
-                                border-width: root.active-emoji-category == 4 ? 1px : 0px;
-                                border-color: accent-color;
-                                Text {
-                                    text: "⚽";
-                                    font-size: 16px;
-                                    horizontal-alignment: center;
-                                    vertical-alignment: center;
-                                }
-                            }
-                        }
-                        // Category 5: Travel
-                        TouchArea {
-                            width: 32px;
-                            height: 32px;
-                            clicked => { root.active-emoji-category = 5; root.emoji-category-changed(5); }
-                            Rectangle {
-                                background: root.active-emoji-category == 5 ? card-hover-bg : transparent;
-                                border-radius: 6px;
-                                border-width: root.active-emoji-category == 5 ? 1px : 0px;
-                                border-color: accent-color;
-                                Text {
-                                    text: "✈️";
-                                    font-size: 16px;
-                                    horizontal-alignment: center;
-                                    vertical-alignment: center;
-                                }
-                            }
-                        }
-                        // Category 6: Objects
-                        TouchArea {
-                            width: 32px;
-                            height: 32px;
-                            clicked => { root.active-emoji-category = 6; root.emoji-category-changed(6); }
-                            Rectangle {
-                                background: root.active-emoji-category == 6 ? card-hover-bg : transparent;
-                                border-radius: 6px;
-                                border-width: root.active-emoji-category == 6 ? 1px : 0px;
-                                border-color: accent-color;
-                                Text {
-                                    text: "💡";
-                                    font-size: 16px;
-                                    horizontal-alignment: center;
-                                    vertical-alignment: center;
-                                }
-                            }
-                        }
-                        // Category 7: Symbols
-                        TouchArea {
-                            width: 32px;
-                            height: 32px;
-                            clicked => { root.active-emoji-category = 7; root.emoji-category-changed(7); }
-                            Rectangle {
-                                background: root.active-emoji-category == 7 ? card-hover-bg : transparent;
-                                border-radius: 6px;
-                                border-width: root.active-emoji-category == 7 ? 1px : 0px;
-                                border-color: accent-color;
-                                Text {
-                                    text: "❤️";
-                                    font-size: 16px;
-                                    horizontal-alignment: center;
-                                    vertical-alignment: center;
-                                }
-                            }
-                        }
-                        // Category 8: Flags
-                        TouchArea {
-                            width: 32px;
-                            height: 32px;
-                            clicked => { root.active-emoji-category = 8; root.emoji-category-changed(8); }
-                            Rectangle {
-                                background: root.active-emoji-category == 8 ? card-hover-bg : transparent;
-                                border-radius: 6px;
-                                border-width: root.active-emoji-category == 8 ? 1px : 0px;
-                                border-color: accent-color;
-                                Text {
-                                    text: "🏁";
-                                    font-size: 16px;
-                                    horizontal-alignment: center;
-                                    vertical-alignment: center;
-                                }
-                            }
-                        }
-                    }
-                    
-                    ScrollView {
-                        viewport-height: emoji_rows.length * 52px;
-                        
-                        VerticalLayout {
-                            padding: 8px;
-                            spacing: 8px;
-                            alignment: start;
-                            
-                            for row in emoji_rows : HorizontalLayout {
-                                spacing: 8px;
-                                alignment: start;
-                                
-                                for emoji in row.cols : TouchArea {
-                                    width: 44px;
-                                    height: 44px;
-                                    clicked => {
-                                        root.record-emoji(emoji.character);
-                                    }
-                                    
-                                    Rectangle {
-                                        background: parent.has-hover ? card-hover-bg : card-bg;
-                                        border-radius: 6px;
-                                        border-width: 1px;
-                                        border-color: border-color;
-                                        
-                                        Text {
-                                            text: emoji.character;
-                                            font-size: 20px;
-                                            font-family: "Noto Color Emoji";
-                                            horizontal-alignment: center;
-                                            vertical-alignment: center;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if (active-tab == 2) : VerticalLayout {
-                    spacing: 12px;
-                    padding: 8px;
-                    alignment: start;
-
-                    Text {
-                        text: "⚙️ Preferences";
-                        font-size: 14px;
-                        font-weight: 700;
-                        color: text-color;
-                    }
-
-                    // Theme selector container
-                    Rectangle {
-                        background: card-bg;
-                        border-radius: 8px;
-                        border-width: 1px;
-                        border-color: border-color;
-                        
-                        VerticalLayout {
-                            padding: 12px;
-                            spacing: 10px;
-
-                            HorizontalLayout {
-                                alignment: space-between;
-                                
-                                VerticalLayout {
-                                    spacing: 2px;
-                                    Text {
-                                        text: "App Theme";
-                                        font-size: 13px;
-                                        font-weight: 600;
-                                        color: text-color;
-                                    }
-                                    Text {
-                                        text: "Choose your preferred color theme mode.";
-                                        font-size: 11px;
-                                        color: text-secondary;
-                                    }
-                                }
-                            }
-
-                            // Theme button group
-                            HorizontalLayout {
-                                spacing: 8px;
-                                height: 32px;
-                                
-                                // Auto (System)
-                                TouchArea {
-                                    clicked => { root.change-theme("system"); }
-                                    Rectangle {
-                                        background: root.theme-mode == "system" ? accent-color : card-hover-bg;
-                                        border-radius: 6px;
-                                        border-width: 1px;
-                                        border-color: root.theme-mode == "system" ? accent-color : border-color;
-                                        Text {
-                                            text: "💻 Auto";
-                                            color: root.theme-mode == "system" ? #ffffff : text-color;
-                                            font-size: 12px;
-                                            font-weight: 600;
-                                            horizontal-alignment: center;
-                                            vertical-alignment: center;
-                                        }
-                                    }
-                                }
-
-                                // Dark
-                                TouchArea {
-                                    clicked => { root.change-theme("dark"); }
-                                    Rectangle {
-                                        background: root.theme-mode == "dark" ? accent-color : card-hover-bg;
-                                        border-radius: 6px;
-                                        border-width: 1px;
-                                        border-color: root.theme-mode == "dark" ? accent-color : border-color;
-                                        Text {
-                                            text: "🌙 Dark";
-                                            color: root.theme-mode == "dark" ? #ffffff : text-color;
-                                            font-size: 12px;
-                                            font-weight: 600;
-                                            horizontal-alignment: center;
-                                            vertical-alignment: center;
-                                        }
-                                    }
-                                }
-
-                                // Light
-                                TouchArea {
-                                    clicked => { root.change-theme("light"); }
-                                    Rectangle {
-                                        background: root.theme-mode == "light" ? accent-color : card-hover-bg;
-                                        border-radius: 6px;
-                                        border-width: 1px;
-                                        border-color: root.theme-mode == "light" ? accent-color : border-color;
-                                        Text {
-                                            text: "☀️ Light";
-                                            color: root.theme-mode == "light" ? #ffffff : text-color;
-                                            font-size: 12px;
-                                            font-weight: 600;
-                                            horizontal-alignment: center;
-                                            vertical-alignment: center;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+                 if (active-tab == 2) : PreferencesPanel {
+                     theme-mode <=> root.theme-mode;
+                     text-color: root.text-color;
+                     text-secondary: root.text-secondary;
+                     card-bg: root.card-bg;
+                     card-hover-bg: root.card-hover-bg;
+                     border-color: root.border-color;
+                     accent-color: root.accent-color;
+                     
+                     change-theme(theme) => { root.change-theme(theme); }
+                 }
+             }
         }
     }
 }
-

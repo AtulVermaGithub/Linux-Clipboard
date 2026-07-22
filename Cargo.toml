@@ -1,6 +1,6 @@
 [package]
-name = "linux-clipboard"
-version = "0.1.0"
+name = "lincb-ople-in"
+version = "0.0.1"
 authors = ["Antigravity"]
 edition = "2021"
 description = "A native Clipboard History Manager for Linux built with Slint and Rust"

@@ -15,17 +15,17 @@ pub struct DesktopShortcut {
 
 const SHORTCUTS: &[DesktopShortcut] = &[
     DesktopShortcut {
-        id: "linux-clipboard-toggle",
+        id: "lincb-ople-in-toggle",
         name: "Toggle Clipboard History",
-        command: "linux-clipboard",
+        command: "lincb.ople.in",
         gnome_binding: "<Super>v",
         kde_shortcut_key: "Meta+V",
         xfce_property: "/commands/custom/<Super>v",
     },
     DesktopShortcut {
-        id: "linux-clipboard-emoji",
+        id: "lincb-ople-in-emoji",
         name: "Open Emoji Picker",
-        command: "linux-clipboard --emoji",
+        command: "lincb.ople.in --emoji",
         gnome_binding: "<Super>period",
         kde_shortcut_key: "Meta+.",
         xfce_property: "/commands/custom/<Super>period",
@@ -91,7 +91,7 @@ pub fn check_shortcut_conflict() -> Result<Option<String>, String> {
                 .collect();
 
             for path in custom_list {
-                if path.contains("linux-clipboard") {
+                if path.contains("lincb.ople.in") {
                     continue;
                 }
 
@@ -138,7 +138,7 @@ pub fn check_shortcut_conflict() -> Result<Option<String>, String> {
             .output();
         if let Ok(out) = output {
             let val = String::from_utf8_lossy(&out.stdout).trim().to_string();
-            if !val.is_empty() && !val.contains("linux-clipboard") && !val.contains("Failed to query") {
+            if !val.is_empty() && !val.contains("lincb.ople.in") && !val.contains("Failed to query") {
                 return Ok(Some(format!("XFCE Custom Shortcut: {}", val)));
             }
         }
@@ -172,7 +172,7 @@ pub fn fix_shortcut_conflict() -> Result<(), String> {
             let mut paths_to_remove = Vec::new();
 
             for path in &custom_list {
-                if path.contains("linux-clipboard") {
+                if path.contains("lincb.ople.in") {
                     continue;
                 }
 
@@ -232,7 +232,7 @@ pub fn register_shortcuts() -> Result<(), String> {
         "kde" => register_kde()?,
         "xfce" => register_xfce()?,
         _ => {
-            return Err("Unsupported desktop environment. Map manually to 'linux-clipboard'.".to_string());
+            return Err("Unsupported desktop environment. Map manually to 'lincb.ople.in'.".to_string());
         }
     }
     Ok(())
@@ -355,11 +355,11 @@ fn register_kde() -> Result<(), String> {
 
     for sc in SHORTCUTS {
         Command::new(kwc)
-            .args(["--file", "kglobalshortcutsrc", "--group", "linux-clipboard", "--key", sc.id, sc.command])
+            .args(["--file", "kglobalshortcutsrc", "--group", "lincb.ople.in", "--key", sc.id, sc.command])
             .status().ok();
             
         Command::new(kwc)
-            .args(["--file", "kglobalshortcutsrc", "--group", "linux-clipboard", "--key", &format!("{}_key", sc.id), sc.kde_shortcut_key])
+            .args(["--file", "kglobalshortcutsrc", "--group", "lincb.ople.in", "--key", &format!("{}_key", sc.id), sc.kde_shortcut_key])
             .status().ok();
     }
 
@@ -382,7 +382,7 @@ fn unregister_kde() -> Result<(), String> {
 
     for sc in SHORTCUTS {
         Command::new(kwc)
-            .args(["--file", "kglobalshortcutsrc", "--group", "linux-clipboard", "--key", sc.id, ""])
+            .args(["--file", "kglobalshortcutsrc", "--group", "lincb.ople.in", "--key", sc.id, ""])
             .status().ok();
     }
 

@@ -58,7 +58,7 @@ pub fn position_window<T: ComponentHandle + 'static>(app: &T) {
                     use x11rb::protocol::xproto::ConnectionExt;
                     if let Ok((conn, _)) = x11rb::connect(None) {
                         // 1. Set WM_CLASS to match the desktop file and prevent "Unknown" in dock
-                        let class_data = b"linux-clipboard\0linux-clipboard\0";
+                        let class_data = b"lincb.ople.in\0lincb.ople.in\0";
                         let _ = conn.change_property(
                             x11rb::protocol::xproto::PropMode::REPLACE,
                             xid,

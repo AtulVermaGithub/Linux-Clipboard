@@ -101,7 +101,7 @@ impl UserSettingsManager {
     pub fn new() -> Self {
         let config_dir = dirs::config_dir()
             .unwrap_or_else(|| PathBuf::from("."))
-            .join("linux-clipboard");
+            .join("lincb.ople.in");
 
         Self { config_dir }
     }
