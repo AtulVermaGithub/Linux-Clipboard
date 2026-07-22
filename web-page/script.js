@@ -87,4 +87,22 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
+    // 4. Dynamic GitHub Release Version Fetcher
+    async function fetchLatestReleaseVersion() {
+        const badge = document.getElementById('version-badge');
+        if (!badge) return;
+        try {
+            const response = await fetch('https://api.github.com/repos/AtulVermaGithub/Linux-Clipboard/releases/latest');
+            if (response.ok) {
+                const data = await response.json();
+                if (data.tag_name) {
+                    badge.textContent = `Latest ${data.tag_name}`;
+                }
+            }
+        } catch (err) {
+            // Silently fallback to default static version in HTML
+        }
+    }
+    fetchLatestReleaseVersion();
+
 });
