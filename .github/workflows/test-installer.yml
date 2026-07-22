@@ -1,0 +1,41 @@
+name: Multi-Distro Installer Test
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  test-ubuntu-matrix:
+    name: Test Installer on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-22.04, ubuntu-20.04]
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Install System Testing Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl sudo
+
+      - name: Test Universal Installer Script
+        run: |
+          bash web-page/install.sh
+
+      - name: Verify Binary Installation
+        run: |
+          test -f /usr/bin/lincb.ople.in
+          test -f /usr/bin/linux-clipboard
+          echo "Binary installed successfully!"
+
+      - name: Test Package Uninstallation
+        run: |
+          sudo apt-get remove -y lincb.ople.in
+          echo "Package uninstalled successfully!"
