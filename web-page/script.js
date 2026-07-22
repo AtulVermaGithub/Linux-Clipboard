@@ -3,7 +3,7 @@
 // ==========================================================================
 
 document.addEventListener('DOMContentLoaded', () => {
-    
+
     // 1. Dark / Light Theme Sync
     const themeToggleBtn = document.getElementById('theme-toggle');
     const lightIcon = document.getElementById('theme-icon-light');
@@ -28,20 +28,20 @@ document.addEventListener('DOMContentLoaded', () => {
     function setTheme(theme) {
         rootHtml.setAttribute('data-theme', theme);
         localStorage.setItem('theme', theme);
-        
+
         const clipHistoryImg = document.getElementById('clip-history-img');
         const emojiImg = document.getElementById('emoji-img');
-        
+
         if (theme === 'light') {
             lightIcon.classList.add('hide');
             darkIcon.classList.remove('hide');
-            if (clipHistoryImg) clipHistoryImg.src = 'assets/clip_history_light.png';
-            if (emojiImg) emojiImg.src = 'assets/emoji_light.png';
+            if (clipHistoryImg) clipHistoryImg.src = 'assets/clip_history_light.webp';
+            if (emojiImg) emojiImg.src = 'assets/emoji_light.webp';
         } else {
             darkIcon.classList.add('hide');
             lightIcon.classList.remove('hide');
-            if (clipHistoryImg) clipHistoryImg.src = 'assets/clip_history_dark.png';
-            if (emojiImg) emojiImg.src = 'assets/emoji_dark.png';
+            if (clipHistoryImg) clipHistoryImg.src = 'assets/clip_history_dark.webp';
+            if (emojiImg) emojiImg.src = 'assets/emoji_dark.webp';
         }
     }
 
@@ -53,11 +53,11 @@ document.addEventListener('DOMContentLoaded', () => {
     copyBtn.addEventListener('click', async () => {
         try {
             await navigator.clipboard.writeText(installCommand);
-            
+
             // Set Success state
             copyBtn.classList.add('success');
             copyText.textContent = 'Copied!';
-            
+
             // Reset after 2 seconds
             setTimeout(() => {
                 copyBtn.classList.remove('success');
@@ -76,11 +76,11 @@ document.addEventListener('DOMContentLoaded', () => {
         tab.addEventListener('click', () => {
             // Get index target
             const targetIdx = parseInt(tab.getAttribute('data-target'), 10);
-            
+
             // Remove active classes
             tabs.forEach(t => t.classList.remove('active'));
             slides.forEach(s => s.classList.remove('active'));
-            
+
             // Apply active class to selected components
             tab.classList.add('active');
             slides[targetIdx].classList.add('active');

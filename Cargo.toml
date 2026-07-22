@@ -49,12 +49,16 @@ zbus = { version = "4", default-features = false, features = ["tokio"] }
 futures-lite = "2"
 
 # System Tray support
-tray-icon = "0.19"
+tray-icon = { version = "0.19", default-features = false }
 gtk = "0.18"
 
 
 [build-dependencies]
 slint-build = "1.9"
+
+[[bin]]
+name = "lincb-ople-in"
+path = "src/main.rs"
 
 [profile.release]
 panic = "abort"

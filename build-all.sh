@@ -15,7 +15,7 @@ BOLD='\033[1m'
 RESET='\033[0m'
 
 APP_NAME="lincb.ople.in"
-PKG_NAME="lincb-ople-in"
+PKG_NAME="lincb.ople.in"
 VERSION="0.0.1"
 ARCH="amd64"
 ARCH_LINUX="x86_64"
@@ -25,8 +25,8 @@ HOMEPAGE="https://lincb.ople.in"
 LICENSE="MIT"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-WORK_DIR="$(dirname "$SCRIPT_DIR")"
-RELEASES_DIR="$SCRIPT_DIR"
+WORK_DIR="$SCRIPT_DIR"
+RELEASES_DIR="$WORK_DIR/releases"
 BINARY="$WORK_DIR/target/release/$APP_NAME"
 ICON="$WORK_DIR/icon.png"
 
@@ -52,8 +52,21 @@ compile() {
     fi
     log "Compiling release binary..."
     cd "$WORK_DIR"
-    cargo build --release
-    cp target/release/$PKG_NAME target/release/$APP_NAME 2>/dev/null || true
+
+    [ -d "/tmp/zig-linux-x86_64-0.13.0" ] && export PATH="/tmp/zig-linux-x86_64-0.13.0:$PATH"
+
+    # Support Zig cross-compilation for universal GLIBC 2.17 baseline
+    if command -v cargo-zigbuild &>/dev/null && command -v zig &>/dev/null; then
+        log "Using cargo-zigbuild targeting universal GLIBC 2.17 baseline..."
+        cargo zigbuild --release --target x86_64-unknown-linux-gnu.2.17
+        mkdir -p target/release
+        cp -f "target/x86_64-unknown-linux-gnu.2.17/release/$PKG_NAME" "$BINARY" 2>/dev/null || true
+    else
+        log "Compiling standard release build..."
+        cargo build --release
+        cp -f "target/release/$PKG_NAME" "$BINARY" 2>/dev/null || true
+    fi
+
     [ -f "$BINARY" ] || err "Binary not found at $BINARY after compilation!"
     ok "Binary compiled: $BINARY ($(du -sh "$BINARY" | cut -f1))"
 }
@@ -72,8 +85,9 @@ build_deb() {
     install -dm755 "$PKG_DIR/etc/xdg/autostart"
     install -dm755 "$PKG_DIR/usr/lib/udev/rules.d"
 
-    # Binary
+    # Binary & legacy symlink
     install -m755 "$BINARY" "$PKG_DIR/usr/bin/$APP_NAME"
+    ln -sf "$APP_NAME" "$PKG_DIR/usr/bin/linux-clipboard"
 
     # Icon
     install -m644 "$ICON" "$PKG_DIR/usr/share/icons/hicolor/256x256/apps/${APP_NAME}.png"
@@ -106,8 +120,7 @@ Version: ${VERSION}
 Architecture: amd64
 Maintainer: ${MAINTAINER}
 Installed-Size: ${INSTALLED_SIZE}
-Depends: libgtk-3-0, libglib2.0-0, libc6 (>= 2.17)
-Recommends: xdotool
+Depends: libgtk-3-0, libglib2.0-0, libc6 (>= 2.17), xdotool, libxdo3
 Section: utils
 Priority: optional
 Homepage: ${HOMEPAGE}
@@ -167,6 +180,7 @@ build_arch() {
     install -dm755 "$STAGE/usr/lib/udev/rules.d"
 
     install -m755 "$BINARY" "$STAGE/usr/bin/$APP_NAME"
+    ln -sf "$APP_NAME" "$STAGE/usr/bin/linux-clipboard"
     install -m644 "$ICON"   "$STAGE/usr/share/icons/hicolor/256x256/apps/${APP_NAME}.png"
 
     cat > "$STAGE/usr/share/applications/${APP_NAME}.desktop" << EOF
@@ -196,14 +210,14 @@ pkgdesc='${DESCRIPTION}'
 arch=('x86_64')
 url='${HOMEPAGE}'
 license=('${LICENSE}')
-depends=('gtk3' 'glib2' 'libx11' 'libxtst')
-optdepends=('xdotool: keyboard simulation support')
+depends=('gtk3' 'glib2' 'libx11' 'libxtst' 'xdotool')
 source=("\${pkgname}-\${pkgver}-\${pkgarch}.tar.gz")
 sha256sums=('SKIP')
 
 package() {
     cd "\$srcdir"
     install -Dm755 usr/bin/${APP_NAME} "\${pkgdir}/usr/bin/${APP_NAME}"
+    ln -sf ${APP_NAME} "\${pkgdir}/usr/bin/linux-clipboard"
     install -Dm644 usr/share/applications/${APP_NAME}.desktop "\${pkgdir}/usr/share/applications/${APP_NAME}.desktop"
     install -Dm644 usr/share/icons/hicolor/256x256/apps/${APP_NAME}.png "\${pkgdir}/usr/share/icons/hicolor/256x256/apps/${APP_NAME}.png"
     install -Dm644 etc/xdg/autostart/${APP_NAME}.desktop "\${pkgdir}/etc/xdg/autostart/${APP_NAME}.desktop"
@@ -214,6 +228,11 @@ EOF
     # .install hook
     cat > "$RELEASES_DIR/arch/${PKG_NAME}.install" << 'EOF'
 post_install() {
+    # Ensure xdotool / libxdo is installed
+    if ! command -v xdotool >/dev/null 2>&1; then
+        echo "--> Auto-installing missing dependency: xdotool..."
+        pacman -Sy --needed --noconfirm xdotool 2>/dev/null || true
+    fi
     modprobe uinput 2>/dev/null || true
     udevadm control --reload-rules 2>/dev/null || true
     udevadm trigger 2>/dev/null || true
@@ -228,9 +247,6 @@ EOF
     # Create source tarball that PKGBUILD references
     local TAR_NAME="${PKG_NAME}-${VERSION}-x86_64.tar.gz"
     (cd "$STAGE" && tar -czf "$RELEASES_DIR/arch/$TAR_NAME" .)
-
-    # Build the actual .pkg.tar.zst using makepkg-style manual packaging
-    local PKG_OUT_NAME="${PKG_NAME}-${VERSION}-1-x86_64.pkg.tar.zst"
 
     # Create .PKGINFO
     INSTALLED_SIZE=$(du -sk "$STAGE" | cut -f1)
@@ -247,15 +263,23 @@ depend = gtk3
 depend = glib2
 depend = libx11
 depend = libxtst
+depend = xdotool
 EOF
 
     # Create .INSTALL from the install hook
     cp "$RELEASES_DIR/arch/${PKG_NAME}.install" "$STAGE/.INSTALL"
 
-    # Pack it
-    (cd "$STAGE" && tar -c --zstd -f "$RELEASES_DIR/arch/$PKG_OUT_NAME" \
-        .PKGINFO .INSTALL \
-        usr etc 2>/dev/null)
+    # Pack Arch package (.pkg.tar.zst or fallback to .pkg.tar.xz)
+    local PKG_OUT_NAME="${PKG_NAME}-${VERSION}-1-x86_64.pkg.tar.zst"
+
+    if command -v zstd &>/dev/null; then
+        (cd "$STAGE" && tar -c --zstd -f "$RELEASES_DIR/arch/$PKG_OUT_NAME" .PKGINFO .INSTALL usr etc 2>/dev/null)
+    elif command -v zstdmt &>/dev/null; then
+        (cd "$STAGE" && tar -c --use-compress-program=zstdmt -f "$RELEASES_DIR/arch/$PKG_OUT_NAME" .PKGINFO .INSTALL usr etc 2>/dev/null)
+    else
+        PKG_OUT_NAME="${PKG_NAME}-${VERSION}-1-x86_64.pkg.tar.xz"
+        (cd "$STAGE" && tar -cJf "$RELEASES_DIR/arch/$PKG_OUT_NAME" .PKGINFO .INSTALL usr etc 2>/dev/null)
+    fi
 
     ok "Arch package:  $RELEASES_DIR/arch/$PKG_OUT_NAME ($(du -sh "$RELEASES_DIR/arch/$PKG_OUT_NAME" | cut -f1))"
     ok "PKGBUILD:      $RELEASES_DIR/arch/PKGBUILD  (for AUR submission)"
@@ -265,23 +289,25 @@ EOF
 build_rpm() {
     log "Building RPM spec + package..."
     local RPM_DIR="$RELEASES_DIR/rpm"
+    local STAGE_DIR="$RPM_DIR/STAGE"
 
     # RPM build tree
-    mkdir -p "$RPM_DIR"/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
+    mkdir -p "$RPM_DIR"/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS} "$STAGE_DIR"
     local SPEC="$RPM_DIR/SPECS/${PKG_NAME}.spec"
-    local BUILDROOT="$RPM_DIR/BUILDROOT/${PKG_NAME}-${VERSION}-1.x86_64"
 
-    # Stage files into BUILDROOT
-    install -dm755 "$BUILDROOT/usr/bin"
-    install -dm755 "$BUILDROOT/usr/share/applications"
-    install -dm755 "$BUILDROOT/usr/share/icons/hicolor/256x256/apps"
-    install -dm755 "$BUILDROOT/etc/xdg/autostart"
-    install -dm755 "$BUILDROOT/usr/lib/udev/rules.d"
+    # Stage files into STAGE_DIR
+    rm -rf "$STAGE_DIR"
+    install -dm755 "$STAGE_DIR/usr/bin"
+    install -dm755 "$STAGE_DIR/usr/share/applications"
+    install -dm755 "$STAGE_DIR/usr/share/icons/hicolor/256x256/apps"
+    install -dm755 "$STAGE_DIR/etc/xdg/autostart"
+    install -dm755 "$STAGE_DIR/usr/lib/udev/rules.d"
 
-    install -m755 "$BINARY" "$BUILDROOT/usr/bin/$APP_NAME"
-    install -m644 "$ICON"   "$BUILDROOT/usr/share/icons/hicolor/256x256/apps/${APP_NAME}.png"
+    install -m755 "$BINARY" "$STAGE_DIR/usr/bin/$APP_NAME"
+    ln -sf "$APP_NAME" "$STAGE_DIR/usr/bin/linux-clipboard"
+    install -m644 "$ICON"   "$STAGE_DIR/usr/share/icons/hicolor/256x256/apps/${APP_NAME}.png"
 
-    cat > "$BUILDROOT/usr/share/applications/${APP_NAME}.desktop" << EOF
+    cat > "$STAGE_DIR/usr/share/applications/${APP_NAME}.desktop" << EOF
 [Desktop Entry]
 Name=Linux Clipboard
 Comment=Lightweight, native clipboard history manager
@@ -293,10 +319,10 @@ Categories=Utility;
 StartupNotify=false
 StartupWMClass=lincb.ople.in
 EOF
-    cp "$BUILDROOT/usr/share/applications/${APP_NAME}.desktop" \
-       "$BUILDROOT/etc/xdg/autostart/${APP_NAME}.desktop"
+    cp "$STAGE_DIR/usr/share/applications/${APP_NAME}.desktop" \
+       "$STAGE_DIR/etc/xdg/autostart/${APP_NAME}.desktop"
     echo 'KERNEL=="uinput", GROUP="input", MODE="0660"' \
-        > "$BUILDROOT/usr/lib/udev/rules.d/99-lincb-uinput.rules"
+        > "$STAGE_DIR/usr/lib/udev/rules.d/99-lincb-uinput.rules"
 
     # Write RPM spec
     cat > "$SPEC" << EOF
@@ -312,7 +338,7 @@ Requires:       gtk3
 Requires:       glib2
 Requires:       libX11
 Requires:       libXtst
-Suggests:       xdotool
+Requires:       xdotool
 
 %description
 lincb.ople.in is a fast, native clipboard history manager for Linux.
@@ -320,7 +346,9 @@ It works on X11 and Wayland, supports text, image, and emoji clips,
 and provides a keyboard-driven interface inspired by Windows 11.
 
 %install
-cp -a %{buildroot}/../${PKG_NAME}-${VERSION}-1.x86_64/* %{buildroot}/
+rm -rf %{buildroot}
+mkdir -p %{buildroot}
+cp -a ${STAGE_DIR}/* %{buildroot}/
 
 %post
 modprobe uinput 2>/dev/null || true
@@ -333,6 +361,7 @@ pkill -f "lincb.ople.in" 2>/dev/null || true
 
 %files
 /usr/bin/${APP_NAME}
+/usr/bin/linux-clipboard
 /usr/share/applications/${APP_NAME}.desktop
 /usr/share/icons/hicolor/256x256/apps/${APP_NAME}.png
 /etc/xdg/autostart/${APP_NAME}.desktop
@@ -347,12 +376,14 @@ EOF
     if command -v rpmbuild &>/dev/null; then
         rpmbuild --define "_topdir $RPM_DIR" \
                  --define "_builddir $RPM_DIR/BUILD" \
+                 --define "_rpmdir $RPM_DIR/RPMS" \
+                 --define "_srcrpmdir $RPM_DIR/SRPMS" \
                  --define "_buildrootdir $RPM_DIR/BUILDROOT" \
-                 --buildroot "$BUILDROOT" \
-                 -bb "$SPEC" 2>&1 | tail -5
+                 --nodeps \
+                 -bb "$SPEC" 2>&1 | tail -8
         # Copy result out
         find "$RPM_DIR/RPMS" -name "*.rpm" -exec cp {} "$RELEASES_DIR/rpm/" \;
-        ok "RPM package built."
+        ok "RPM package:  $RELEASES_DIR/rpm/${PKG_NAME}-${VERSION}-1.x86_64.rpm"
     else
         warn "rpmbuild not found — RPM spec written but .rpm not built."
         warn "On Fedora/RHEL: sudo dnf install rpm-build, then:"
@@ -382,6 +413,7 @@ DATADIR="$PREFIX/share"
 
 echo "Installing $APP to $BINDIR..."
 sudo install -Dm755 "$APP" "$BINDIR/$APP"
+sudo ln -sf "$APP" "$BINDIR/linux-clipboard"
 sudo install -Dm644 icon.png "$DATADIR/icons/hicolor/256x256/apps/${APP}.png"
 sudo mkdir -p "$DATADIR/applications" /etc/xdg/autostart
 
@@ -453,8 +485,9 @@ exec "$HERE/usr/bin/lincb.ople.in" "$@"
 EOF
     chmod +x "$APPDIR/AppRun"
 
-    # Binary
+    # Binary & legacy symlink
     install -m755 "$BINARY" "$APPDIR/usr/bin/$APP_NAME"
+    ln -sf "$APP_NAME" "$APPDIR/usr/bin/linux-clipboard"
 
     # Icon (both at root and hicolor path — appimagetool needs root-level)
     install -m644 "$ICON" "$APPDIR/usr/share/icons/hicolor/256x256/apps/${APP_NAME}.png"
@@ -480,19 +513,30 @@ EOF
     mkdir -p "$RELEASES_DIR/appimage"
     local OUT="$RELEASES_DIR/appimage/${APP_NAME}-${VERSION}-x86_64.AppImage"
 
-    if [ -x "$APPIMAGETOOL" ]; then
-        # Extract appimagetool if not already done (needed on systems without FUSE userspace)
-        local TOOL_DIR="$RELEASES_DIR/squashfs-root"
-        if [ ! -d "$TOOL_DIR" ]; then
-            log "Extracting appimagetool (one-time setup)..."
-            (cd "$RELEASES_DIR" && ./appimagetool --appimage-extract > /dev/null 2>&1)
-        fi
-        ARCH=x86_64 "$TOOL_DIR/AppRun" --no-appstream "$APPDIR" "$OUT" 2>&1 | tail -8
+    if [ ! -f "$RELEASES_DIR/appimagetool" ]; then
+        log "Downloading appimagetool..."
+        wget -q "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage" -O "$RELEASES_DIR/appimagetool" || true
+        chmod +x "$RELEASES_DIR/appimagetool" || true
+    fi
+
+    if [ -f "$RELEASES_DIR/appimagetool" ] && [ ! -d "$RELEASES_DIR/squashfs-root" ]; then
+        log "Extracting appimagetool..."
+        (cd "$RELEASES_DIR" && ./appimagetool --appimage-extract > /dev/null 2>&1) || true
+    fi
+
+    local TOOL_RUN=""
+    if [ -x "$RELEASES_DIR/squashfs-root/AppRun" ]; then
+        TOOL_RUN="$RELEASES_DIR/squashfs-root/AppRun"
+    elif [ -x "$WORK_DIR/squashfs-root/AppRun" ]; then
+        TOOL_RUN="$WORK_DIR/squashfs-root/AppRun"
+    fi
+
+    if [ -n "$TOOL_RUN" ]; then
+        ARCH=x86_64 "$TOOL_RUN" --no-appstream "$APPDIR" "$OUT" 2>&1 | tail -8
         chmod +x "$OUT"
         ok "AppImage:      $OUT ($(du -sh "$OUT" | cut -f1))"
     else
-        warn "appimagetool not found at $APPIMAGETOOL — AppImage skipped."
-        warn "Download: https://github.com/AppImage/appimagetool/releases"
+        warn "appimagetool not found — AppImage skipped."
     fi
 }
 
@@ -504,7 +548,7 @@ generate_checksums() {
 
     find "$RELEASES_DIR" \( -name "*.deb" -o -name "*.pkg.tar.zst" \
         -o -name "*.rpm" -o -name "*.tar.gz" -o -name "*.AppImage" \) \
-        -not -path "*/build/*" \
+        -not -path "*/build/*" -not -path "*/RPMS/*" -not -path "*/SOURCES/*" -not -path "*/STAGE/*" \
         | sort | while read -r f; do
             sha256sum "$f" | sed "s|$RELEASES_DIR/||" >> "$SUM_FILE"
         done

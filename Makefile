@@ -40,6 +40,7 @@ add-user-group:
 install:
 	@echo "Installing $(APP_NAME) binary..."
 	install -Dm755 target/release/$(APP_NAME) $(DESTDIR)$(BINDIR)/$(APP_NAME)
+	ln -sf $(APP_NAME) $(DESTDIR)$(BINDIR)/linux-clipboard
 
 	@echo "Installing desktop icon..."
 	@mkdir -p $(DESTDIR)$(DATADIR)/icons/hicolor/256x256/apps
@@ -63,11 +64,12 @@ install:
 	@mkdir -p $(DESTDIR)/etc/xdg/autostart
 	cp $(DESTDIR)$(DATADIR)/applications/$(DESKTOP_FILE) $(DESTDIR)/etc/xdg/autostart/$(DESKTOP_FILE)
 
-	@echo "✓ Installed successfully! You can run it via launcher or by typing '$(APP_NAME)'."
+	@echo "✓ Installed successfully! You can run it via launcher or by typing '$(APP_NAME)' or 'linux-clipboard'."
 
 uninstall:
 	@echo "Removing $(APP_NAME)..."
 	rm -f $(DESTDIR)$(BINDIR)/$(APP_NAME)
+	rm -f $(DESTDIR)$(BINDIR)/linux-clipboard
 	rm -f $(DESTDIR)$(DATADIR)/applications/$(DESKTOP_FILE)
 	rm -f $(DESTDIR)/etc/xdg/autostart/$(DESKTOP_FILE)
 	rm -f $(DESTDIR)$(DATADIR)/icons/hicolor/256x256/apps/$(APP_NAME).png
