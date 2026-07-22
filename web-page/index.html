@@ -37,8 +37,8 @@
     <meta property="og:title" content="Linux Clipboard History — Free Open-Source Clipboard Manager">
     <meta property="og:description"
         content="Instantly recall copied text, images and emojis on Linux. One-line install. Supports X11, Wayland, GNOME, KDE, XFCE. Built with Rust. 100% open source.">
-    <meta property="og:image" content="https://lincb.ople.in/assets/clip_history_dark.webp">
-    <meta property="og:image:secure_url" content="https://lincb.ople.in/assets/clip_history_dark.webp">
+    <meta property="og:image" content="https://lincb.ople.in/assets/icon.webp">
+    <meta property="og:image:secure_url" content="https://lincb.ople.in/assets/icon.webp">
     <meta property="og:image:type" content="image/webp">
     <meta property="og:image:width" content="800">
     <meta property="og:image:height" content="600">
@@ -55,7 +55,7 @@
     <meta name="twitter:title" content="Linux Clipboard History — Free Open-Source Clipboard Manager">
     <meta name="twitter:description"
         content="Recall copied text, images and emojis on Linux. Supports X11, Wayland, GNOME, KDE. Built with Rust. One-line install.">
-    <meta name="twitter:image" content="https://lincb.ople.in/assets/clip_history_dark.webp">
+    <meta name="twitter:image" content="https://lincb.ople.in/assets/icon.webp">
     <meta name="twitter:image:alt"
         content="Linux Clipboard History app showing clipboard history, snippets and image previews">
 
@@ -80,8 +80,9 @@
       "description": "A free, open-source clipboard history manager for Linux desktops. Supports X11 and Wayland display servers. Built with Rust and Slint. Features text history, image previews, emoji picker, keyboard navigation, and one-line installation.",
       "keywords": "linux clipboard, clipboard manager, clipboard history, wayland clipboard, x11 clipboard, gnome clipboard, ubuntu clipboard, rust clipboard manager",
       "screenshot": [
-        "https://lincb.ople.in/assets/clip_history_dark.webp",
-        "https://lincb.ople.in/assets/emoji_dark.webp"
+        "https://lincb.ople.in/assets/icon.webp",
+        "https://lincb.ople.in/assets/clip_history_dark.webp"
+        "https://lincb.ople.in/assets/clip_history_light.webp"
       ],
       "featureList": [
         "Clipboard history tracking",
@@ -104,12 +105,13 @@
       "codeRepository": "https://github.com/AtulVermaGithub/Linux-Clipboard",
       "author": {
         "@type": "Organization",
-        "name": "Linux Clipboard Project",
-        "url": "https://lincb.ople.in/"
+        "name": "Ople",
+        "url": "https://ople.in/"
       },
       "maintainer": {
         "@type": "Organization",
-        "name": "Linux Clipboard Project"
+        "name": "Ople",
+        "url": "https://ople.in/"
       },
       "programmingLanguage": ["Rust", "Slint"],
       "isAccessibleForFree": true,
@@ -314,7 +316,8 @@
                         <div class="feature-icon" aria-hidden="true">⌨️</div>
                         <h3 class="feature-title">Keyboard Navigation &amp; Quick Paste</h3>
                         <p class="feature-description">Move through your clipboard history using arrow keys and press
-                            <strong>Enter</strong> to paste instantly. No mouse needed. Works with any app in Linux.</p>
+                            <strong>Enter</strong> to paste instantly. No mouse needed. Works with any app in Linux.
+                        </p>
                     </article>
 
                     <article class="feature-card glassmorphism">
@@ -322,7 +325,8 @@
                         <h3 class="feature-title">Native Wayland &amp; X11 Support</h3>
                         <p class="feature-description">Full support for both display servers. Uses a Linux
                             <code>uinput</code> virtual keyboard device for Wayland paste injection, with stable XTest
-                            fallback on X11.</p>
+                            fallback on X11.
+                        </p>
                     </article>
 
                     <article class="feature-card glassmorphism">
@@ -376,7 +380,11 @@
                     <div class="faq-item glassmorphism">
                         <h3 class="faq-question">How do I install Linux Clipboard History?</h3>
                         <p class="faq-answer">Run this single command in your terminal:
-                            <code>curl -sS https://lincb.ople.in/install.sh | bash</code>. It automatically detects your Linux distribution, downloads the matching pre-built package (<code>.deb</code>, <code>.pkg.tar.zst</code>, <code>.rpm</code>, or <code>AppImage</code>), configures udev permissions, and sets up desktop shortcuts automatically.</p>
+                            <code>curl -sS https://lincb.ople.in/install.sh | bash</code>. It automatically detects your
+                            Linux distribution, downloads the matching pre-built package (<code>.deb</code>,
+                            <code>.pkg.tar.zst</code>, <code>.rpm</code>, or <code>AppImage</code>), configures udev
+                            permissions, and sets up desktop shortcuts automatically.
+                        </p>
                     </div>
 
                     <div class="faq-item glassmorphism">
@@ -407,7 +415,8 @@
                         <p class="faq-answer">Linux Clipboard has been tested on <strong>Ubuntu</strong>,
                             <strong>Fedora</strong>, and <strong>Arch Linux</strong>. It should work on any
                             systemd-based Linux distro that supports Rust, udev rules, and either X11 or Wayland.
-                            Debian, Mint, openSUSE, and Manjaro are expected to work too.</p>
+                            Debian, Mint, openSUSE, and Manjaro are expected to work too.
+                        </p>
                     </div>
 
                 </div>
