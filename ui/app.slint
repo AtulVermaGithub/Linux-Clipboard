@@ -39,7 +39,9 @@ export component AppWindow inherits Window {
     callback clear-history();
     callback record-emoji(string);       // emoji char
     callback search-changed(string);     // search text
+    callback emoji-category-changed(int); // category index
     callback open-settings();
+    callback change-theme(string);
     callback close-window();
     callback check-shortcuts();
     callback fix-shortcuts();
@@ -50,12 +52,15 @@ export component AppWindow inherits Window {
     in-out property <[SlintEmojiRow]> emoji_rows: [];
     in-out property <int> selected_index: 0;
     in-out property <int> active-tab: 0; // 0 = Clips, 1 = Emojis, 2 = GIFs/Kaomojis
+    in-out property <int> active-emoji-category: 0; // 0-8 for emoji categories
     in-out property <bool> is-dark: true;
     in-out property <bool> show-setup: false;
     in-out property <int> setup-step: 0; // 0 = Welcome, 1 = Detect/Conflict, 2 = Manual Setup
     in-out property <string> shortcut-status: "detecting"; // "detecting", "conflict", "ok", "failed"
     in-out property <string> shortcut-details: "";
     in-out property <string> search-placeholder: "Search clipboard...";
+    in-out property <string> search-text: "";
+    in-out property <string> theme-mode: "system";
 
 
     // Dynamic coloring tokens
@@ -66,6 +71,39 @@ export component AppWindow inherits Window {
     property <color> accent-color: #0078d4; // Windows Blue accent
     property <color> card-bg: is-dark ? #2d2d2d : #ffffff;
     property <color> card-hover-bg: is-dark ? #3d3d3d : #f9f9f9;
+    property <color> pinned-color: is-dark ? #ffb900 : #d83b01;
+    property <color> pinned-bg: is-dark ? rgba(255, 185, 0, 0.08) : rgba(216, 59, 1, 0.06);
+
+    in-out property <length> scroll-y: 0px;
+
+    function scroll-to-index(idx: int) {
+        let has-pinned: bool = root.clips.length > 0 && root.clips[0].pinned;
+        let is-past-pinned: bool = idx > 0 && !root.clips[idx].pinned && has-pinned;
+        let item-top: length = idx * 76px + (has-pinned ? (is-past-pinned ? 44px : 22px) : 22px);
+        let item-bottom: length = item-top + 70px;
+        let view-top = -scroll-y;
+        let view-bottom = -scroll-y + 330px;
+        
+        if (item-top < view-top) {
+            scroll-y = -item-top;
+        } else if (item-bottom > view-bottom) {
+            scroll-y = -(item-bottom - 330px);
+        }
+    }
+
+    changed selected_index => {
+        root.scroll-to-index(self.selected_index);
+    }
+
+    public function reset-state() {
+        root.search-text = "";
+        root.selected_index = 0;
+        root.scroll-y = 0px;
+        root.active-tab = 0;
+        root.active-emoji-category = 0;
+        root.search-placeholder = "Search history...";
+        root.search-changed("");
+    }
 
     // Main layout container with rounded border
     FocusScope {
@@ -336,6 +374,7 @@ export component AppWindow inherits Window {
 
                 // Header section
                 HorizontalLayout {
+                    z: 10;
                     alignment: space-between;
                     
                     Text {
@@ -350,37 +389,115 @@ export component AppWindow inherits Window {
                         spacing: 8px;
                         
                         // Clear All button
-                        TouchArea {
+                        clear-all-btn := TouchArea {
                             width: 24px;
                             height: 24px;
                             clicked => { root.clear-history(); }
                             
                             Rectangle {
-                                background: parent.has-hover ? card-hover-bg : transparent;
+                                background: clear-all-btn.has-hover ? card-hover-bg : transparent;
                                 border-radius: 4px;
+                                
+                                // Custom Vector-drawn Red Trashcan Icon
+                                Rectangle {
+                                    width: 12px;
+                                    height: 14px;
+                                    
+                                    VerticalLayout {
+                                        spacing: 1px;
+                                        alignment: center;
+                                        
+                                        // Lid handle
+                                        Rectangle {
+                                            width: 4px;
+                                            height: 1.5px;
+                                            background: #ff3b30;
+                                            border-radius: 0.5px;
+                                        }
+                                        
+                                        // Lid
+                                        Rectangle {
+                                            width: 12px;
+                                            height: 1.5px;
+                                            background: #ff3b30;
+                                            border-radius: 0.5px;
+                                        }
+                                        
+                                        // Can body
+                                        Rectangle {
+                                            width: 10px;
+                                            height: 9px;
+                                            border-width: 1.2px;
+                                            border-color: #ff3b30;
+                                            border-radius: 1px;
+                                            
+                                            // Ribs
+                                            HorizontalLayout {
+                                                alignment: space-around;
+                                                padding-left: 1.5px;
+                                                padding-right: 1.5px;
+                                                Rectangle { width: 1px; height: 5px; background: #ff3b30; }
+                                                Rectangle { width: 1px; height: 5px; background: #ff3b30; }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            if (clear-all-btn.has-hover) : Rectangle {
+                                x: -80px;
+                                y: 28px;
+                                width: 96px;
+                                height: 20px;
+                                background: card-bg;
+                                border-radius: 4px;
+                                border-width: 1px;
+                                border-color: border-color;
+                                z: 100;
+                                
                                 Text {
-                                    text: "🗑️";
-                                    font-size: 13px;
-                                    color: text-secondary;
+                                    text: "Clear clipboard";
+                                    font-size: 10px;
+                                    color: text-color;
                                     horizontal-alignment: center;
                                     vertical-alignment: center;
                                 }
                             }
                         }
 
-                        // Settings Button
-                        TouchArea {
+                        // Preferences Button
+                        pref-btn := TouchArea {
                             width: 24px;
                             height: 24px;
-                            clicked => { root.open-settings(); }
+                            clicked => { active-tab = 2; }
                             
                             Rectangle {
-                                background: parent.has-hover ? card-hover-bg : transparent;
+                                background: pref-btn.has-hover ? card-hover-bg : transparent;
                                 border-radius: 4px;
                                 Text {
-                                    text: "⚙️";
+                                    text: "☰";
                                     font-size: 13px;
                                     color: text-secondary;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+                            }
+                            
+                            if (pref-btn.has-hover) : Rectangle {
+                                x: -60px;
+                                y: 28px;
+                                width: 80px;
+                                height: 20px;
+                                background: card-bg;
+                                border-radius: 4px;
+                                border-width: 1px;
+                                border-color: border-color;
+                                z: 100;
+                                
+                                Text {
+                                    text: "Preferences";
+                                    font-size: 10px;
+                                    color: text-color;
                                     horizontal-alignment: center;
                                     vertical-alignment: center;
                                 }
@@ -408,22 +525,26 @@ export component AppWindow inherits Window {
                     }
                 }
 
-                // Tab Switcher Bar
-                HorizontalLayout {
+                              HorizontalLayout {
                     height: 36px;
                     spacing: 4px;
                     
                     // Tab 1: Clipboard
                     TouchArea {
-                        clicked => { active-tab = 0; search-placeholder = "Search clipboard..."; }
+                        clicked => {
+                            active-tab = 0;
+                            search-placeholder = "Search history...";
+                            root.search-text = "";
+                            root.search-changed("");
+                        }
                         Rectangle {
-                            background: active-tab == 0 ? card-bg : transparent;
+                            background: active-tab == 0 ? card-bg : (parent.has-hover ? card-hover-bg : bg-color);
                             border-radius: 6px;
-                            border-width: active-tab == 0 ? 1px : 0px;
-                            border-color: border-color;
+                            border-width: 1px;
+                            border-color: active-tab == 0 ? accent-color : border-color;
                             Text {
-                                text: "📋 Clips";
-                                font-weight: active-tab == 0 ? 600 : 400;
+                                text: "🕒 History";
+                                font-weight: 600;
                                 color: active-tab == 0 ? accent-color : text-secondary;
                                 horizontal-alignment: center;
                                 vertical-alignment: center;
@@ -433,15 +554,22 @@ export component AppWindow inherits Window {
 
                     // Tab 2: Emojis
                     TouchArea {
-                        clicked => { active-tab = 1; search-placeholder = "Search emojis..."; }
+                        clicked => {
+                            active-tab = 1;
+                            search-placeholder = "Search emojis...";
+                            root.search-text = "";
+                            root.search-changed("");
+                            root.active-emoji-category = 0;
+                            root.emoji-category-changed(0);
+                        }
                         Rectangle {
-                            background: active-tab == 1 ? card-bg : transparent;
+                            background: active-tab == 1 ? card-bg : (parent.has-hover ? card-hover-bg : bg-color);
                             border-radius: 6px;
-                            border-width: active-tab == 1 ? 1px : 0px;
-                            border-color: border-color;
+                            border-width: 1px;
+                            border-color: active-tab == 1 ? accent-color : border-color;
                             Text {
                                 text: "😊 Emojis";
-                                font-weight: active-tab == 1 ? 600 : 400;
+                                font-weight: 600;
                                 color: active-tab == 1 ? accent-color : text-secondary;
                                 horizontal-alignment: center;
                                 vertical-alignment: center;
@@ -451,7 +579,7 @@ export component AppWindow inherits Window {
                 }
 
                 // Search Bar Container
-                Rectangle {
+                if (active-tab != 2) : Rectangle {
                     height: 36px;
                     background: card-bg;
                     border-radius: 8px;
@@ -464,6 +592,7 @@ export component AppWindow inherits Window {
                         alignment: stretch;
                         
                         search-input := TextInput {
+                            text <=> root.search-text;
                             font-size: 13px;
                             color: text-color;
                             single-line: true;
@@ -506,83 +635,113 @@ export component AppWindow inherits Window {
  
                  // Main tab layouts viewport
                  if (active-tab == 0) : ScrollView {
-                     viewport-height: clips.length * 76px;
+                     viewport-y <=> root.scroll-y;
                      
                      VerticalLayout {
+                         alignment: start;
                          spacing: 6px;
                          padding-right: 4px;
                          
-                         for clip[idx] in clips : TouchArea {
-                             height: 70px;
-                             clicked => { root.paste-item(clip.id); }
- 
-                             Rectangle {
-                                 background: (root.selected_index == idx) ? card-hover-bg : (parent.has-hover ? card-hover-bg : card-bg);
-                                 border-radius: 8px;
-                                 border-width: (root.selected_index == idx || clip.pinned) ? 1.5px : 1px;
-                                 border-color: (root.selected_index == idx) ? accent-color : (clip.pinned ? accent-color : border-color);
-                                 
-                                 HorizontalLayout {
-                                     padding: 8px;
-                                     spacing: 8px;
-                                     
-                                     if (clip.item_type == "Image") : Image {
-                                         source: clip.image;
-                                         width: 80px;
-                                         height: 54px;
-                                         image-fit: contain;
-                                     }
-                                     
-                                     VerticalLayout {
-                                         alignment: center;
-                                         
-                                         // Preview text/snippet content
-                                         Text {
-                                             text: clip.preview;
-                                             font-size: 13px;
-                                             color: text-color;
-                                             overflow: elide;
-                                             max-height: 34px;
-                                         }
- 
-                                         Text {
-                                             text: clip.timestamp_str;
-                                             font-size: 10px;
-                                             color: text-secondary;
-                                         }
-                                     }
-                                    
-                                    // Row Action buttons (Pin & Delete)
-                                    VerticalLayout {
-                                        alignment: center;
-                                        HorizontalLayout {
-                                            alignment: end;
-                                            spacing: 6px;
-                                            width: 50px;
-                                            
-                                            // Pin Button
-                                            TouchArea {
-                                                width: 20px;
-                                                height: 20px;
-                                                clicked => { root.toggle-pin(clip.id); }
-                                                Text {
-                                                    text: clip.pinned ? "📌" : "📍";
-                                                    font-size: 12px;
-                                                    horizontal-alignment: center;
-                                                    vertical-alignment: center;
-                                                }
-                                            }
+                         for clip[idx] in clips : VerticalLayout {
+                             spacing: 4px;
+                             
+                             if (idx == 0 && clip.pinned) : HorizontalLayout {
+                                 padding-left: 6px;
+                                 padding-top: 2px;
+                                 padding-bottom: 2px;
+                                 Text {
+                                     text: "📌 Pinned";
+                                     font-size: 11px;
+                                     font-weight: 700;
+                                     color: pinned-color;
+                                 }
+                             }
+                             
+                             if (!clip.pinned && (idx == 0 || root.clips[idx - 1].pinned)) : HorizontalLayout {
+                                 padding-left: 6px;
+                                 padding-top: 6px;
+                                 padding-bottom: 2px;
+                                 Text {
+                                     text: "📋 Recent";
+                                     font-size: 11px;
+                                     font-weight: 700;
+                                     color: text-secondary;
+                                 }
+                             }
 
-                                            // Delete Button
-                                            TouchArea {
-                                                width: 20px;
-                                                height: 20px;
-                                                clicked => { root.delete-item(clip.id); }
-                                                Text {
-                                                    text: "❌";
-                                                    font-size: 10px;
-                                                    horizontal-alignment: center;
-                                                    vertical-alignment: center;
+                             TouchArea {
+                                 height: 70px;
+                                 clicked => { root.paste-item(clip.id); }
+     
+                                 Rectangle {
+                                     clip: true;
+                                     background: (root.selected_index == idx) ? card-hover-bg : (parent.has-hover ? card-hover-bg : (clip.pinned ? pinned-bg : card-bg));
+                                     border-radius: 8px;
+                                     border-width: (root.selected_index == idx) ? 1.5px : 1px;
+                                     border-color: (root.selected_index == idx) ? accent-color : border-color;
+                                     
+                                     HorizontalLayout {
+                                         padding: 8px;
+                                         spacing: 8px;
+                                         
+                                         if (clip.item_type == "Image") : Image {
+                                             source: clip.image;
+                                             width: 80px;
+                                             height: 54px;
+                                             image-fit: contain;
+                                         }
+                                         
+                                         VerticalLayout {
+                                             alignment: center;
+                                             
+                                             // Preview text/snippet content
+                                             Text {
+                                                 text: clip.preview;
+                                                 font-size: 13px;
+                                                 color: text-color;
+                                                 overflow: elide;
+                                                 max-height: 34px;
+                                             }
+     
+                                             Text {
+                                                 text: clip.timestamp_str;
+                                                 font-size: 10px;
+                                                 color: text-secondary;
+                                             }
+                                         }
+                                        
+                                        // Row Action buttons (Pin & Delete)
+                                        VerticalLayout {
+                                            alignment: center;
+                                            HorizontalLayout {
+                                                alignment: end;
+                                                spacing: 6px;
+                                                width: 50px;
+                                                
+                                                // Pin Button
+                                                TouchArea {
+                                                    width: 20px;
+                                                    height: 20px;
+                                                    clicked => { root.toggle-pin(clip.id); }
+                                                    Text {
+                                                        text: clip.pinned ? "📌" : "📍";
+                                                        font-size: 12px;
+                                                        horizontal-alignment: center;
+                                                        vertical-alignment: center;
+                                                    }
+                                                }
+    
+                                                // Delete Button
+                                                TouchArea {
+                                                    width: 20px;
+                                                    height: 20px;
+                                                    clicked => { root.delete-item(clip.id); }
+                                                    Text {
+                                                        text: "❌";
+                                                        font-size: 10px;
+                                                        horizontal-alignment: center;
+                                                        vertical-alignment: center;
+                                                    }
                                                 }
                                             }
                                         }
@@ -593,37 +752,321 @@ export component AppWindow inherits Window {
                     }
                 }
 
-                if (active-tab == 1) : ScrollView {
-                    viewport-height: emoji_rows.length * 52px;
+                if (active-tab == 1) : VerticalLayout {
+                    spacing: 8px;
                     
-                    VerticalLayout {
-                        padding: 8px;
-                        spacing: 8px;
-                        alignment: start;
+                    // Categories Bar
+                    HorizontalLayout {
+                        height: 36px;
+                        spacing: 4px;
+                        padding-left: 6px;
+                        padding-right: 6px;
+                        alignment: center;
                         
-                        for row in emoji_rows : HorizontalLayout {
+                        // Category 0: Smileys
+                        TouchArea {
+                            width: 32px;
+                            height: 32px;
+                            clicked => { root.active-emoji-category = 0; root.emoji-category-changed(0); }
+                            Rectangle {
+                                background: root.active-emoji-category == 0 ? card-hover-bg : transparent;
+                                border-radius: 6px;
+                                border-width: root.active-emoji-category == 0 ? 1px : 0px;
+                                border-color: accent-color;
+                                Text {
+                                    text: "😀";
+                                    font-size: 16px;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+                            }
+                        }
+                        // Category 1: People
+                        TouchArea {
+                            width: 32px;
+                            height: 32px;
+                            clicked => { root.active-emoji-category = 1; root.emoji-category-changed(1); }
+                            Rectangle {
+                                background: root.active-emoji-category == 1 ? card-hover-bg : transparent;
+                                border-radius: 6px;
+                                border-width: root.active-emoji-category == 1 ? 1px : 0px;
+                                border-color: accent-color;
+                                Text {
+                                    text: "👋";
+                                    font-size: 16px;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+                            }
+                        }
+                        // Category 2: Animals
+                        TouchArea {
+                            width: 32px;
+                            height: 32px;
+                            clicked => { root.active-emoji-category = 2; root.emoji-category-changed(2); }
+                            Rectangle {
+                                background: root.active-emoji-category == 2 ? card-hover-bg : transparent;
+                                border-radius: 6px;
+                                border-width: root.active-emoji-category == 2 ? 1px : 0px;
+                                border-color: accent-color;
+                                Text {
+                                    text: "🐱";
+                                    font-size: 16px;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+                            }
+                        }
+                        // Category 3: Food
+                        TouchArea {
+                            width: 32px;
+                            height: 32px;
+                            clicked => { root.active-emoji-category = 3; root.emoji-category-changed(3); }
+                            Rectangle {
+                                background: root.active-emoji-category == 3 ? card-hover-bg : transparent;
+                                border-radius: 6px;
+                                border-width: root.active-emoji-category == 3 ? 1px : 0px;
+                                border-color: accent-color;
+                                Text {
+                                    text: "🍔";
+                                    font-size: 16px;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+                            }
+                        }
+                        // Category 4: Activities
+                        TouchArea {
+                            width: 32px;
+                            height: 32px;
+                            clicked => { root.active-emoji-category = 4; root.emoji-category-changed(4); }
+                            Rectangle {
+                                background: root.active-emoji-category == 4 ? card-hover-bg : transparent;
+                                border-radius: 6px;
+                                border-width: root.active-emoji-category == 4 ? 1px : 0px;
+                                border-color: accent-color;
+                                Text {
+                                    text: "⚽";
+                                    font-size: 16px;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+                            }
+                        }
+                        // Category 5: Travel
+                        TouchArea {
+                            width: 32px;
+                            height: 32px;
+                            clicked => { root.active-emoji-category = 5; root.emoji-category-changed(5); }
+                            Rectangle {
+                                background: root.active-emoji-category == 5 ? card-hover-bg : transparent;
+                                border-radius: 6px;
+                                border-width: root.active-emoji-category == 5 ? 1px : 0px;
+                                border-color: accent-color;
+                                Text {
+                                    text: "✈️";
+                                    font-size: 16px;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+                            }
+                        }
+                        // Category 6: Objects
+                        TouchArea {
+                            width: 32px;
+                            height: 32px;
+                            clicked => { root.active-emoji-category = 6; root.emoji-category-changed(6); }
+                            Rectangle {
+                                background: root.active-emoji-category == 6 ? card-hover-bg : transparent;
+                                border-radius: 6px;
+                                border-width: root.active-emoji-category == 6 ? 1px : 0px;
+                                border-color: accent-color;
+                                Text {
+                                    text: "💡";
+                                    font-size: 16px;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+                            }
+                        }
+                        // Category 7: Symbols
+                        TouchArea {
+                            width: 32px;
+                            height: 32px;
+                            clicked => { root.active-emoji-category = 7; root.emoji-category-changed(7); }
+                            Rectangle {
+                                background: root.active-emoji-category == 7 ? card-hover-bg : transparent;
+                                border-radius: 6px;
+                                border-width: root.active-emoji-category == 7 ? 1px : 0px;
+                                border-color: accent-color;
+                                Text {
+                                    text: "❤️";
+                                    font-size: 16px;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+                            }
+                        }
+                        // Category 8: Flags
+                        TouchArea {
+                            width: 32px;
+                            height: 32px;
+                            clicked => { root.active-emoji-category = 8; root.emoji-category-changed(8); }
+                            Rectangle {
+                                background: root.active-emoji-category == 8 ? card-hover-bg : transparent;
+                                border-radius: 6px;
+                                border-width: root.active-emoji-category == 8 ? 1px : 0px;
+                                border-color: accent-color;
+                                Text {
+                                    text: "🏁";
+                                    font-size: 16px;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+                            }
+                        }
+                    }
+                    
+                    ScrollView {
+                        viewport-height: emoji_rows.length * 52px;
+                        
+                        VerticalLayout {
+                            padding: 8px;
                             spacing: 8px;
                             alignment: start;
                             
-                            for emoji in row.cols : TouchArea {
-                                width: 44px;
-                                height: 44px;
-                                clicked => {
-                                    root.record-emoji(emoji.character);
-                                }
+                            for row in emoji_rows : HorizontalLayout {
+                                spacing: 8px;
+                                alignment: start;
                                 
-                                Rectangle {
-                                    background: parent.has-hover ? card-hover-bg : card-bg;
-                                    border-radius: 6px;
-                                    border-width: 1px;
-                                    border-color: border-color;
+                                for emoji in row.cols : TouchArea {
+                                    width: 44px;
+                                    height: 44px;
+                                    clicked => {
+                                        root.record-emoji(emoji.character);
+                                    }
                                     
+                                    Rectangle {
+                                        background: parent.has-hover ? card-hover-bg : card-bg;
+                                        border-radius: 6px;
+                                        border-width: 1px;
+                                        border-color: border-color;
+                                        
+                                        Text {
+                                            text: emoji.character;
+                                            font-size: 20px;
+                                            font-family: "Noto Color Emoji";
+                                            horizontal-alignment: center;
+                                            vertical-alignment: center;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (active-tab == 2) : VerticalLayout {
+                    spacing: 12px;
+                    padding: 8px;
+                    alignment: start;
+
+                    Text {
+                        text: "⚙️ Preferences";
+                        font-size: 14px;
+                        font-weight: 700;
+                        color: text-color;
+                    }
+
+                    // Theme selector container
+                    Rectangle {
+                        background: card-bg;
+                        border-radius: 8px;
+                        border-width: 1px;
+                        border-color: border-color;
+                        
+                        VerticalLayout {
+                            padding: 12px;
+                            spacing: 10px;
+
+                            HorizontalLayout {
+                                alignment: space-between;
+                                
+                                VerticalLayout {
+                                    spacing: 2px;
                                     Text {
-                                        text: emoji.character;
-                                        font-size: 20px;
-                                        font-family: "Noto Color Emoji";
-                                        horizontal-alignment: center;
-                                        vertical-alignment: center;
+                                        text: "App Theme";
+                                        font-size: 13px;
+                                        font-weight: 600;
+                                        color: text-color;
+                                    }
+                                    Text {
+                                        text: "Choose your preferred color theme mode.";
+                                        font-size: 11px;
+                                        color: text-secondary;
+                                    }
+                                }
+                            }
+
+                            // Theme button group
+                            HorizontalLayout {
+                                spacing: 8px;
+                                height: 32px;
+                                
+                                // Auto (System)
+                                TouchArea {
+                                    clicked => { root.change-theme("system"); }
+                                    Rectangle {
+                                        background: root.theme-mode == "system" ? accent-color : card-hover-bg;
+                                        border-radius: 6px;
+                                        border-width: 1px;
+                                        border-color: root.theme-mode == "system" ? accent-color : border-color;
+                                        Text {
+                                            text: "💻 Auto";
+                                            color: root.theme-mode == "system" ? #ffffff : text-color;
+                                            font-size: 12px;
+                                            font-weight: 600;
+                                            horizontal-alignment: center;
+                                            vertical-alignment: center;
+                                        }
+                                    }
+                                }
+
+                                // Dark
+                                TouchArea {
+                                    clicked => { root.change-theme("dark"); }
+                                    Rectangle {
+                                        background: root.theme-mode == "dark" ? accent-color : card-hover-bg;
+                                        border-radius: 6px;
+                                        border-width: 1px;
+                                        border-color: root.theme-mode == "dark" ? accent-color : border-color;
+                                        Text {
+                                            text: "🌙 Dark";
+                                            color: root.theme-mode == "dark" ? #ffffff : text-color;
+                                            font-size: 12px;
+                                            font-weight: 600;
+                                            horizontal-alignment: center;
+                                            vertical-alignment: center;
+                                        }
+                                    }
+                                }
+
+                                // Light
+                                TouchArea {
+                                    clicked => { root.change-theme("light"); }
+                                    Rectangle {
+                                        background: root.theme-mode == "light" ? accent-color : card-hover-bg;
+                                        border-radius: 6px;
+                                        border-width: 1px;
+                                        border-color: root.theme-mode == "light" ? accent-color : border-color;
+                                        Text {
+                                            text: "☀️ Light";
+                                            color: root.theme-mode == "light" ? #ffffff : text-color;
+                                            font-size: 12px;
+                                            font-weight: 600;
+                                            horizontal-alignment: center;
+                                            vertical-alignment: center;
+                                        }
                                     }
                                 }
                             }

@@ -24,7 +24,7 @@ This document is the blueprint and development tracker for **linux-clipboard** (
 ## 2. Directory Structure
 
 We will structure the project inside `work/` as follows:
-
+vv😀😓😐😆🙃Directory🤔😀😭v🍋
 ```
 work/
 ├── Cargo.toml             # Project dependencies (Slint, rusqlite, arboard, tokio, etc.)

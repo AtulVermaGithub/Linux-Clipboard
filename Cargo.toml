@@ -41,6 +41,9 @@ percent-encoding = "2.3"
 x11rb = { version = "0.13", features = ["allow-unsafe-code", "xtest"] }
 libc = "0.2"
 
+# Emojis database helper
+emojis = "0.6"
+
 # DBus integration (for theme changes and system desktop notifications)
 zbus = { version = "4", default-features = false, features = ["tokio"] }
 futures-lite = "2"

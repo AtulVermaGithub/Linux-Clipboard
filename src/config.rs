@@ -138,6 +138,7 @@ impl UserSettingsManager {
     }
 
     /// Saves user settings to the config file
+    #[allow(dead_code)]
     pub fn save(&self, settings: &UserSettings) -> Result<(), String> {
         if !self.config_dir.exists() {
             fs::create_dir_all(&self.config_dir)

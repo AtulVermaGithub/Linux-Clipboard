@@ -39,17 +39,22 @@ install:
 	@echo "Installing $(APP_NAME) binary..."
 	install -Dm755 target/release/$(APP_NAME) $(DESTDIR)$(BINDIR)/$(APP_NAME)
 
+	@echo "Installing desktop icon..."
+	@mkdir -p $(DESTDIR)$(DATADIR)/icons/hicolor/256x256/apps
+	install -Dm644 icon.png $(DESTDIR)$(DATADIR)/icons/hicolor/256x256/apps/$(APP_NAME).png
+
 	@echo "Installing desktop launcher..."
 	@mkdir -p $(DESTDIR)$(DATADIR)/applications
 	echo '[Desktop Entry]' > $(DESTDIR)$(DATADIR)/applications/$(DESKTOP_FILE)
 	echo 'Name=Linux Clipboard' >> $(DESTDIR)$(DATADIR)/applications/$(DESKTOP_FILE)
 	echo 'Comment=Lightweight, native clipboard history manager' >> $(DESTDIR)$(DATADIR)/applications/$(DESKTOP_FILE)
 	echo 'Exec=$(BINDIR)/$(APP_NAME)' >> $(DESTDIR)$(DATADIR)/applications/$(DESKTOP_FILE)
-	echo 'Icon=edit-paste' >> $(DESTDIR)$(DATADIR)/applications/$(DESKTOP_FILE)
+	echo 'Icon=$(APP_NAME)' >> $(DESTDIR)$(DATADIR)/applications/$(DESKTOP_FILE)
 	echo 'Terminal=false' >> $(DESTDIR)$(DATADIR)/applications/$(DESKTOP_FILE)
 	echo 'Type=Application' >> $(DESTDIR)$(DATADIR)/applications/$(DESKTOP_FILE)
 	echo 'Categories=Utility;Application;' >> $(DESTDIR)$(DATADIR)/applications/$(DESKTOP_FILE)
 	echo 'StartupNotify=false' >> $(DESTDIR)$(DATADIR)/applications/$(DESKTOP_FILE)
+	echo 'StartupWMClass=linux-clipboard' >> $(DESTDIR)$(DATADIR)/applications/$(DESKTOP_FILE)
 	chmod 644 $(DESTDIR)$(DATADIR)/applications/$(DESKTOP_FILE)
 
 	@# Configure autostart
@@ -63,6 +68,7 @@ uninstall:
 	rm -f $(DESTDIR)$(BINDIR)/$(APP_NAME)
 	rm -f $(DESTDIR)$(DATADIR)/applications/$(DESKTOP_FILE)
 	rm -f $(DESTDIR)/etc/xdg/autostart/$(DESKTOP_FILE)
+	rm -f $(DESTDIR)$(DATADIR)/icons/hicolor/256x256/apps/$(APP_NAME).png
 	rm -f /etc/udev/rules.d/99-uinput-clipboard.rules
 	@echo "✓ Uninstalled successfully."
 

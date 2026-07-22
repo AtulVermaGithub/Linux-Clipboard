@@ -45,19 +45,65 @@ pub fn position_window<T: ComponentHandle + 'static>(app: &T) {
         // For X11, borderless windows work best when kept on top or manually activated
         if is_x11() {
             winit_win.set_window_level(WindowLevel::AlwaysOnTop);
+            
+            // Try to skip taskbar/dock to prevent dock shaking
+            use i_slint_backend_winit::winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
+            if let Ok(handle) = winit_win.window_handle() {
+                let xid_u32 = match handle.as_raw() {
+                    RawWindowHandle::Xlib(xlib_handle) => Some(xlib_handle.window as u32),
+                    RawWindowHandle::Xcb(xcb_handle) => Some(xcb_handle.window.get()),
+                    _ => None,
+                };
+                if let Some(xid) = xid_u32 {
+                    use x11rb::protocol::xproto::ConnectionExt;
+                    if let Ok((conn, _)) = x11rb::connect(None) {
+                        // 1. Set WM_CLASS to match the desktop file and prevent "Unknown" in dock
+                        let class_data = b"linux-clipboard\0linux-clipboard\0";
+                        let _ = conn.change_property(
+                            x11rb::protocol::xproto::PropMode::REPLACE,
+                            xid,
+                            x11rb::protocol::xproto::AtomEnum::WM_CLASS,
+                            x11rb::protocol::xproto::AtomEnum::STRING,
+                            8,
+                            class_data.len() as u32,
+                            class_data,
+                        );
+
+                        // 2. Set _NET_WM_STATE_SKIP_TASKBAR
+                        if let Ok(reply_state) = conn.intern_atom(false, b"_NET_WM_STATE") {
+                            if let Ok(reply_skip) = conn.intern_atom(false, b"_NET_WM_STATE_SKIP_TASKBAR") {
+                                if let (Ok(r_state), Ok(r_skip)) = (reply_state.reply(), reply_skip.reply()) {
+                                    let net_wm_state = r_state.atom;
+                                    let net_wm_state_skip_taskbar = r_skip.atom;
+                                    let _ = conn.change_property(
+                                        x11rb::protocol::xproto::PropMode::APPEND,
+                                        xid,
+                                        net_wm_state,
+                                        x11rb::protocol::xproto::AtomEnum::ATOM,
+                                        32,
+                                        1,
+                                        &net_wm_state_skip_taskbar.to_ne_bytes(),
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     });
 }
 
 /// Setup window focus loss listener to automatically hide when clicking elsewhere.
 /// Returns a slint::Timer that must be kept alive by the caller.
-pub fn setup_focus_loss_listener<T: ComponentHandle + 'static>(app: &T) -> slint::Timer {
+pub fn setup_focus_loss_listener(app: &crate::AppWindow) -> slint::Timer {
     let timer = slint::Timer::default();
     let weak_app = app.as_weak();
     
     // We track whether the window has received focus since it was made visible.
-    // This prevents the window from hiding itself before the window manager has finished mapping it.
+    // We also track ticks to give the window manager time to map the window and settle focus.
     let mut has_had_focus = false;
+    let mut visible_ticks = 0;
     
     timer.start(
         slint::TimerMode::Repeated,
@@ -65,19 +111,25 @@ pub fn setup_focus_loss_listener<T: ComponentHandle + 'static>(app: &T) -> slint
         move || {
             if let Some(app) = weak_app.upgrade() {
                 if app.window().is_visible() {
+                    visible_ticks += 1;
                     let is_focused = app.window().with_winit_window(|winit_win| {
                         winit_win.has_focus()
                     }).unwrap_or(false);
                     
-                    if is_focused {
+                    if is_focused || visible_ticks > 5 {
                         has_had_focus = true;
-                    } else if has_had_focus {
-                        // Only hide if the window actually had focus and has now lost it.
+                    }
+                    
+                    if visible_ticks > 5 && has_had_focus && !is_focused {
+                        // Only hide if focus is lost after a 500ms startup settling period.
                         let _ = app.window().hide();
-                        has_had_focus = false; // Reset state
+                        app.invoke_reset_state();
+                        has_had_focus = false;
+                        visible_ticks = 0;
                     }
                 } else {
-                    has_had_focus = false; // Reset state when hidden
+                    has_had_focus = false;
+                    visible_ticks = 0;
                 }
             }
         },

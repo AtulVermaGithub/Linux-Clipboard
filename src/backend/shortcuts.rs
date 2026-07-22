@@ -239,6 +239,7 @@ pub fn register_shortcuts() -> Result<(), String> {
 }
 
 /// Unregister desktop environment shortcuts
+#[allow(dead_code)]
 pub fn unregister_shortcuts() -> Result<(), String> {
     let de = detect_desktop_environment();
     match de.as_str() {
@@ -302,6 +303,7 @@ fn register_gnome() -> Result<(), String> {
     Ok(())
 }
 
+#[allow(dead_code)]
 fn unregister_gnome() -> Result<(), String> {
     if !command_exists("gsettings") {
         return Ok(());
@@ -368,6 +370,7 @@ fn register_kde() -> Result<(), String> {
     Ok(())
 }
 
+#[allow(dead_code)]
 fn unregister_kde() -> Result<(), String> {
     let kwc = if command_exists("kwriteconfig6") {
         "kwriteconfig6"
@@ -405,6 +408,7 @@ fn register_xfce() -> Result<(), String> {
     Ok(())
 }
 
+#[allow(dead_code)]
 fn unregister_xfce() -> Result<(), String> {
     if !command_exists("xfconf-query") {
         return Ok(());

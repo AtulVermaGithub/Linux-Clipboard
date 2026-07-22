@@ -34,6 +34,7 @@ pub struct ClipboardItem {
 
 /// Emoji usage details
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[allow(dead_code)]
 pub struct EmojiUsage {
     pub char: String,
     pub use_count: u32,
@@ -287,6 +288,7 @@ pub fn record_emoji_usage(conn: &Connection, emoji: &str) -> Result<()> {
 }
 
 /// Retrieve top emojis ordered by usage frequency
+#[allow(dead_code)]
 pub fn get_recent_emojis(conn: &Connection, limit: usize) -> Result<Vec<EmojiUsage>> {
     let mut stmt = conn.prepare(
         "SELECT char, use_count, last_used 
