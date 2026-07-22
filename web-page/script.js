@@ -35,13 +35,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (theme === 'light') {
             lightIcon.classList.add('hide');
             darkIcon.classList.remove('hide');
-            if (clipHistoryImg) clipHistoryImg.src = 'assets/clip_history_light.webp';
-            if (emojiImg) emojiImg.src = 'assets/emoji_light.webp';
+            if (clipHistoryImg) clipHistoryImg.src = './assets/clip_history_light.webp';
+            if (emojiImg) emojiImg.src = './assets/emoji_light.webp';
         } else {
             darkIcon.classList.add('hide');
             lightIcon.classList.remove('hide');
-            if (clipHistoryImg) clipHistoryImg.src = 'assets/clip_history_dark.webp';
-            if (emojiImg) emojiImg.src = 'assets/emoji_dark.webp';
+            if (clipHistoryImg) clipHistoryImg.src = './assets/clip_history_dark.webp';
+            if (emojiImg) emojiImg.src = './assets/emoji_dark.webp';
         }
     }
 
