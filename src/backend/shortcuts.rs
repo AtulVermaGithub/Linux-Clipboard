@@ -18,17 +18,25 @@ const SHORTCUTS: &[DesktopShortcut] = &[
         id: "lincb-ople-in-toggle",
         name: "Toggle Clipboard History",
         command: "lincb.ople.in",
-        gnome_binding: "<Super>v",
-        kde_shortcut_key: "Meta+V",
-        xfce_property: "/commands/custom/<Super>v",
+        gnome_binding: "<Alt>v",
+        kde_shortcut_key: "Alt+V",
+        xfce_property: "/commands/custom/<Alt>v",
     },
     DesktopShortcut {
         id: "lincb-ople-in-emoji",
         name: "Open Emoji Picker",
         command: "lincb.ople.in --emoji",
-        gnome_binding: "<Super>period",
-        kde_shortcut_key: "Meta+.",
-        xfce_property: "/commands/custom/<Super>period",
+        gnome_binding: "<Alt>period",
+        kde_shortcut_key: "Alt+.",
+        xfce_property: "/commands/custom/<Alt>period",
+    },
+    DesktopShortcut {
+        id: "lincb-ople-in-ocr",
+        name: "Extract Screen Text (OCR)",
+        command: "lincb.ople.in --ocr",
+        gnome_binding: "<Alt><Shift>t",
+        kde_shortcut_key: "Alt+Shift+T",
+        xfce_property: "/commands/custom/<Alt><Shift>t",
     },
 ];
 
@@ -200,7 +208,7 @@ pub fn fix_shortcut_conflict() -> Result<(), String> {
                 .status().ok();
         }
 
-        // 2. Clear system message tray conflicts
+        // 2. Clear system message tray conflicts (<Super>v)
         let sys_output = Command::new("gsettings")
             .args(["get", "org.gnome.shell.keybindings", "toggle-message-tray"])
             .output();
@@ -212,6 +220,17 @@ pub fn fix_shortcut_conflict() -> Result<(), String> {
                     .status().ok();
             }
         }
+
+        // 3. Clear IBus and GTK Emoji chooser hotkeys so Super+. never types underlined 'e'
+        Command::new("gsettings")
+            .args(["set", "org.freedesktop.ibus.panel.emoji", "hotkey", "@as []"])
+            .status().ok();
+        Command::new("gsettings")
+            .args(["set", "org.gtk.Settings.EmojiChooser", "trigger-combo", "''"])
+            .status().ok();
+        Command::new("gsettings")
+            .args(["set", "org.gtk.v4.Settings.EmojiChooser", "trigger-combo", "''"])
+            .status().ok();
     } else if de == "xfce" {
         if command_exists("xfconf-query") {
             Command::new("xfconf-query")
@@ -419,6 +438,130 @@ fn unregister_xfce() -> Result<(), String> {
             .args(["--channel", "xfce4-keyboard-shortcuts", "--property", sc.xfce_property, "--reset"])
             .status().ok();
     }
+
+    Ok(())
+}
+
+/// Fixes/registers a single specific shortcut instantly ("toggle", "emoji", or "ocr")
+pub fn fix_single_shortcut(shortcut_type: &str) -> Result<(), String> {
+    let target_sc = match shortcut_type {
+        "toggle" => &SHORTCUTS[0],
+        "emoji" => &SHORTCUTS[1],
+        "ocr" => &SHORTCUTS[2],
+        _ => return Err("Unknown shortcut type".to_string()),
+    };
+
+    let de = detect_desktop_environment();
+    match de.as_str() {
+        "gnome" => fix_single_gnome(target_sc)?,
+        "kde" => fix_single_kde(target_sc)?,
+        "xfce" => fix_single_xfce(target_sc)?,
+        _ => {
+            return Err("Unsupported DE".to_string());
+        }
+    }
+    Ok(())
+}
+
+fn fix_single_gnome(sc: &DesktopShortcut) -> Result<(), String> {
+    if !command_exists("gsettings") {
+        return Err("gsettings tool not found".to_string());
+    }
+
+    let base_path = "org.gnome.settings-daemon.plugins.media-keys.custom-keybinding";
+    let keybindings_list_schema = "org.gnome.settings-daemon.plugins.media-keys";
+
+    // 1. Clear system toggle-message-tray if fixing Super+V
+    if sc.gnome_binding == "<Super>v" {
+        Command::new("gsettings")
+            .args(["set", "org.gnome.shell.keybindings", "toggle-message-tray", "['<Super><Shift>v']"])
+            .status().ok();
+    }
+    if sc.gnome_binding == "<Super>period" {
+        Command::new("gsettings")
+            .args(["set", "org.freedesktop.ibus.panel.emoji", "hotkey", "@as []"])
+            .status().ok();
+        Command::new("gsettings")
+            .args(["set", "org.gtk.Settings.EmojiChooser", "trigger-combo", "''"])
+            .status().ok();
+        Command::new("gsettings")
+            .args(["set", "org.gtk.v4.Settings.EmojiChooser", "trigger-combo", "''"])
+            .status().ok();
+    }
+
+    // 2. Read custom-keybindings list
+    let output = Command::new("gsettings")
+        .args(["get", keybindings_list_schema, "custom-keybindings"])
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    let list_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let mut custom_list: Vec<String> = if list_str.starts_with('[') && list_str.ends_with(']') {
+        list_str[1..list_str.len() - 1]
+            .split(',')
+            .map(|s| s.trim().trim_matches('\'').to_string())
+            .filter(|s| !s.is_empty())
+            .collect()
+    } else {
+        Vec::new()
+    };
+
+    let binding_path = format!("/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/{}/", sc.id);
+
+    Command::new("gsettings")
+        .args(["set", &format!("{}:{}", base_path, binding_path), "name", sc.name])
+        .status().ok();
+    Command::new("gsettings")
+        .args(["set", &format!("{}:{}", base_path, binding_path), "command", sc.command])
+        .status().ok();
+    Command::new("gsettings")
+        .args(["set", &format!("{}:{}", base_path, binding_path), "binding", sc.gnome_binding])
+        .status().ok();
+
+    if !custom_list.contains(&binding_path) {
+        custom_list.push(binding_path);
+    }
+
+    let list_formatted = format!("[{}]", custom_list.iter().map(|s| format!("'{}'", s)).collect::<Vec<String>>().join(", "));
+    Command::new("gsettings")
+        .args(["set", keybindings_list_schema, "custom-keybindings", &list_formatted])
+        .status()
+        .map_err(|e| format!("Failed to update gsettings custom-keybindings: {}", e))?;
+
+    Ok(())
+}
+
+fn fix_single_kde(sc: &DesktopShortcut) -> Result<(), String> {
+    let kwc = if command_exists("kwriteconfig6") {
+        "kwriteconfig6"
+    } else if command_exists("kwriteconfig5") {
+        "kwriteconfig5"
+    } else {
+        return Err("kwriteconfig utility not found".to_string());
+    };
+
+    Command::new(kwc)
+        .args(["--file", "kglobalshortcutsrc", "--group", "lincb.ople.in", "--key", sc.id, sc.command])
+        .status().ok();
+    Command::new(kwc)
+        .args(["--file", "kglobalshortcutsrc", "--group", "lincb.ople.in", "--key", &format!("{}_key", sc.id), sc.kde_shortcut_key])
+        .status().ok();
+
+    Command::new("qdbus")
+        .args(["org.kde.kglobalaccel", "/kglobalaccel", "org.kde.KGlobalAccel.reconfigure"])
+        .status().ok();
+
+    Ok(())
+}
+
+fn fix_single_xfce(sc: &DesktopShortcut) -> Result<(), String> {
+    if !command_exists("xfconf-query") {
+        return Err("xfconf-query utility not found".to_string());
+    }
+
+    Command::new("xfconf-query")
+        .args(["--channel", "xfce4-keyboard-shortcuts", "--property", sc.xfce_property, "--create", "--type", "string", "--set", sc.command])
+        .status().ok();
 
     Ok(())
 }

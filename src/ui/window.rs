@@ -116,12 +116,12 @@ pub fn setup_focus_loss_listener(app: &crate::AppWindow) -> slint::Timer {
                         winit_win.has_focus()
                     }).unwrap_or(false);
                     
-                    if is_focused || visible_ticks > 5 {
+                    if is_focused {
                         has_had_focus = true;
                     }
                     
-                    if visible_ticks > 5 && has_had_focus && !is_focused {
-                        // Only hide if focus is lost after a 500ms startup settling period.
+                    if visible_ticks > 10 && has_had_focus && !is_focused {
+                        // Only hide if window was ACTUALLY focused by user and then lost focus
                         let _ = app.window().hide();
                         app.invoke_reset_state();
                         has_had_focus = false;

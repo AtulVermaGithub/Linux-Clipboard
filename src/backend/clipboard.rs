@@ -333,3 +333,43 @@ pub fn calculate_hash<T: Hash + ?Sized>(t: &T) -> u64 {
     t.hash(&mut s);
     s.finish()
 }
+
+/// Public API to push extracted text (e.g. from OCR or external modules)
+/// into both the active OS clipboard and the SQLite history database.
+pub fn push_extracted_text(
+    text: &str,
+    db: &std::sync::Arc<parking_lot::Mutex<rusqlite::Connection>>,
+) -> Result<(), String> {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return Err("Extracted text is empty".to_string());
+    }
+
+    // 1. Write to OS Clipboard
+    set_text_robust(trimmed)?;
+
+    // 2. Add item to SQLite database
+    let conn = db.lock();
+    let preview = if trimmed.len() > 100 {
+        format!("{}...", &trimmed[..100])
+    } else {
+        trimmed.to_string()
+    };
+
+    let item = crate::backend::db::ClipboardItem {
+        id: uuid::Uuid::new_v4().to_string(),
+        content: crate::backend::db::ClipboardContent::Text(trimmed.to_string()),
+        timestamp: chrono::Utc::now(),
+        pinned: false,
+        preview,
+    };
+
+    if let Err(e) = crate::backend::db::insert_item(&conn, &item) {
+        eprintln!("[Clipboard API] Failed to insert item into db: {}", e);
+    } else {
+        eprintln!("[Clipboard API] Successfully ingested {} chars into history & clipboard", trimmed.len());
+    }
+
+    Ok(())
+}
+

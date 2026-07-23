@@ -8,6 +8,10 @@ use std::path::PathBuf;
 const USER_SETTINGS_FILE: &str = "settings.json";
 pub const DEFAULT_MAX_HISTORY_SIZE: usize = 50;
 
+fn default_true() -> bool {
+    true
+}
+
 /// User-configurable settings for the application
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserSettings {
@@ -25,6 +29,9 @@ pub struct UserSettings {
     pub enable_smart_actions: bool,
     /// Enable UI Polish
     pub enable_ui_polish: bool,
+    /// Enable Screen OCR Text Extractor (Alt + Shift + T)
+    #[serde(default = "default_true")]
+    pub enable_ocr_feature: bool,
 
     // --- History Settings ---
     /// Maximum number of clipboard history items to keep (1 to 100000)
@@ -48,6 +55,7 @@ impl Default for UserSettings {
             enable_dynamic_tray_icon: true,
             enable_smart_actions: true,
             enable_ui_polish: true,
+            enable_ocr_feature: true,
             max_history_size: DEFAULT_MAX_HISTORY_SIZE,
             auto_delete_interval: 0,
             auto_delete_unit: "hours".to_string(),

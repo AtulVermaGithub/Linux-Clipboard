@@ -8,7 +8,7 @@
 
 set -e
 
-DEFAULT_VERSION="0.0.2"
+DEFAULT_VERSION="0.0.3"
 APP_NAME="lincb.ople.in"
 PKG_NAME="lincb.ople.in"
 GITHUB_REPO="AtulVermaGithub/Linux-Clipboard"

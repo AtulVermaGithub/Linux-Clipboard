@@ -78,11 +78,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let setup_path = config_dir.join("setup_done");
     let is_first_run = !setup_path.exists();
 
-    // Register global shortcuts *only* if not first run
-    if !is_first_run {
-        if let Err(e) = backend::shortcuts::register_shortcuts() {
-            eprintln!("[Main] Shortcuts warning: {}", e);
-        }
+    // Always register/update desktop environment shortcuts on startup
+    if let Err(e) = backend::shortcuts::register_shortcuts() {
+        eprintln!("[Main] Shortcuts registration warning: {}", e);
     }
 
     // Create Slint App Window
@@ -96,12 +94,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     app.set_is_dark(initial_is_dark);
     app.set_theme_mode(settings.theme_mode.clone().into());
-    app.set_show_setup(is_first_run);
+    app.set_enable_ocr(settings.enable_ocr_feature);
+
+    let force_setup = args.contains(&"--setup".to_string());
+    app.set_show_setup(is_first_run || force_setup);
     
-    // Check if --emoji flag is present on startup
+    // Check if CLI flags are present on startup
     if args.contains(&"--emoji".to_string()) {
         app.set_active_tab(1);
         app.set_search_placeholder("Search emojis...".into());
+    } else if args.contains(&"--ocr".to_string()) {
+        crate::backend::ocr::run_ocr_capture_and_ingest(conn.clone(), app_weak.clone());
     }
     
     // Populate initial emojis
@@ -118,7 +121,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     ui::window::position_window(&app);
 
     // Spawn IPC socket listener in background
-    spawn_ipc_listener(&sock_path, app_weak.clone());
+    spawn_ipc_listener(&sock_path, app_weak.clone(), conn.clone());
 
     // Start background clipboard watcher
     let app_weak_watcher = app_weak.clone();
@@ -230,32 +233,34 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
 
-            // Check Clipboard Image
-            if let Ok(Some((image_data, hash))) = backend::clipboard::get_current_image() {
-                if hash != last_image_hash_val {
-                    backend::clipboard::LAST_IMAGE_HASH.store(hash, std::sync::atomic::Ordering::SeqCst);
-                    backend::clipboard::LAST_TEXT_HASH.store(0, std::sync::atomic::Ordering::SeqCst);
+            // Check Clipboard Image (skipped if OCR capture is running)
+            if !backend::ocr::IS_OCR_RUNNING.load(std::sync::atomic::Ordering::SeqCst) {
+                if let Ok(Some((image_data, hash))) = backend::clipboard::get_current_image() {
+                    if hash != last_image_hash_val {
+                        backend::clipboard::LAST_IMAGE_HASH.store(hash, std::sync::atomic::Ordering::SeqCst);
+                        backend::clipboard::LAST_TEXT_HASH.store(0, std::sync::atomic::Ordering::SeqCst);
 
-                    if let Some(b64) = backend::clipboard::convert_image_to_base64(&image_data) {
-                        let item = ClipboardItem {
-                            id: uuid::Uuid::new_v4().to_string(),
-                            content: ClipboardContent::Image {
-                                base64: b64,
-                                width: image_data.width as u32,
-                                height: image_data.height as u32,
-                            },
-                            timestamp: chrono::Utc::now(),
-                            pinned: false,
-                            preview: format!("Image ({}x{})", image_data.width, image_data.height),
-                        };
+                        if let Some(b64) = backend::clipboard::convert_image_to_base64(&image_data) {
+                            let item = ClipboardItem {
+                                id: uuid::Uuid::new_v4().to_string(),
+                                content: ClipboardContent::Image {
+                                    base64: b64,
+                                    width: image_data.width as u32,
+                                    height: image_data.height as u32,
+                                },
+                                timestamp: chrono::Utc::now(),
+                                pinned: false,
+                                preview: format!("Image ({}x{})", image_data.width, image_data.height),
+                            };
 
-                        let db = conn_watcher.lock();
-                        if backend::db::insert_item(&db, &item).is_ok() {
-                            let app_weak_c = app_weak_watcher.clone();
-                            let conn_c = conn_watcher.clone();
-                            slint::invoke_from_event_loop(move || {
-                                refresh_clips(app_weak_c, conn_c, String::new());
-                            }).ok();
+                            let db = conn_watcher.lock();
+                            if backend::db::insert_item(&db, &item).is_ok() {
+                                let app_weak_c = app_weak_watcher.clone();
+                                let conn_c = conn_watcher.clone();
+                                slint::invoke_from_event_loop(move || {
+                                    refresh_clips(app_weak_c, conn_c, String::new());
+                                }).ok();
+                            }
                         }
                     }
                 }
@@ -519,6 +524,16 @@ fn setup_callbacks(
         }
     });
 
+    // 11b. Fix Single Shortcut instantly (toggle, emoji, ocr)
+    app.on_fix_single_shortcut(move |sc_type| {
+        let sc_str = sc_type.to_string();
+        if let Err(e) = backend::shortcuts::fix_single_shortcut(&sc_str) {
+            eprintln!("[Main] Failed to fix single shortcut {}: {}", sc_str, e);
+        } else {
+            eprintln!("[Main] Successfully registered single shortcut {}", sc_str);
+        }
+    });
+
     // 12. Change Theme settings
     let config_manager_theme = config_manager.clone();
     let app_weak_theme = app_weak.clone();
@@ -541,6 +556,27 @@ fn setup_callbacks(
                 _ => is_system_dark_mode(),
             };
             app.set_is_dark(is_dark);
+        }
+    });
+
+    // 13. Toggle OCR setting
+    let config_manager_ocr = config_manager.clone();
+    let app_weak_ocr = app_weak.clone();
+    app.on_toggle_ocr(move |enabled| {
+        if let Some(app) = app_weak_ocr.upgrade() {
+            app.set_enable_ocr(enabled);
+            let mut settings = config_manager_ocr.load();
+            settings.enable_ocr_feature = enabled;
+            let _ = config_manager_ocr.save(&settings);
+        }
+    });
+
+    // 14. Open Setup Wizard
+    let app_weak_open_setup = app_weak.clone();
+    app.on_open_setup(move || {
+        if let Some(app) = app_weak_open_setup.upgrade() {
+            app.set_setup_step(0);
+            app.set_show_setup(true);
         }
     });
 }

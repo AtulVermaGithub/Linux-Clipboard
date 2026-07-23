@@ -16,7 +16,7 @@ RESET='\033[0m'
 
 APP_NAME="lincb.ople.in"
 PKG_NAME="lincb.ople.in"
-VERSION="0.0.2"
+VERSION="0.0.3"
 ARCH="amd64"
 ARCH_LINUX="x86_64"
 DESCRIPTION="A native Clipboard History Manager for Linux, built with Rust and Slint"
@@ -45,35 +45,16 @@ banner() {
 
 # ─── Step 0: Compile ───────────────────────────────────────────────────────
 compile() {
-    if [ -f "$BINARY" ]; then
-        ok "Binary already exists: $BINARY ($(du -sh "$BINARY" | cut -f1)) — skipping recompile."
-        ok "To force recompile, delete the binary and re-run this script."
-        return
-    fi
     log "Compiling release binary..."
     cd "$WORK_DIR"
-
-    [ -d "/tmp/zig-linux-x86_64-0.13.0" ] && export PATH="/tmp/zig-linux-x86_64-0.13.0:$PATH"
-
-    # Support Zig cross-compilation for universal GLIBC 2.17 baseline
-    if command -v cargo-zigbuild &>/dev/null && command -v zig &>/dev/null; then
-        log "Using cargo-zigbuild targeting universal GLIBC 2.17 baseline..."
-        cargo zigbuild --release --target x86_64-unknown-linux-gnu.2.17
-        mkdir -p target/release
-        local FOUND_BIN="$(find target -type f -name "lincb-ople-in" -not -path "*/deps/*" -not -path "*/build/*" | head -1)"
-        if [ -n "$FOUND_BIN" ]; then
-            cp -f "$FOUND_BIN" "$BINARY"
-        fi
+    cargo build --release
+    
+    if [ -f "target/release/lincb-ople-in" ]; then
+        cp -f "target/release/lincb-ople-in" "$BINARY"
     else
-        log "Compiling standard release build..."
-        cargo build --release
-        local FOUND_BIN="$(find target -type f -name "lincb-ople-in" -not -path "*/deps/*" -not -path "*/build/*" | head -1)"
-        if [ -n "$FOUND_BIN" ]; then
-            cp -f "$FOUND_BIN" "$BINARY"
-        fi
+        err "Binary not found at target/release/lincb-ople-in!"
     fi
 
-    [ -f "$BINARY" ] || err "Binary not found at $BINARY after compilation!"
     ok "Binary compiled: $BINARY ($(du -sh "$BINARY" | cut -f1))"
 }
 
@@ -126,7 +107,7 @@ Version: ${VERSION}
 Architecture: amd64
 Maintainer: ${MAINTAINER}
 Installed-Size: ${INSTALLED_SIZE}
-Depends: libgtk-3-0, libglib2.0-0, libc6 (>= 2.17), xdotool
+Depends: libc6 (>= 2.17), libgtk-3-0, libglib2.0-0, libx11-6, libxtst6, xdotool, tesseract-ocr, slurp, grim, gnome-screenshot
 Section: utils
 Priority: optional
 Homepage: ${HOMEPAGE}
@@ -146,6 +127,12 @@ if [ "$1" = "configure" ]; then
     udevadm trigger 2>/dev/null || true
     if [ -n "$SUDO_USER" ]; then
         usermod -aG input "$SUDO_USER" 2>/dev/null || true
+    fi
+    # Auto-install missing OCR/screen dependencies if installed via dpkg directly
+    if ! command -v slurp >/dev/null 2>&1 || ! command -v grim >/dev/null 2>&1 || ! command -v tesseract >/dev/null 2>&1; then
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update -qq 2>/dev/null || true
+        apt-get install -y -qq slurp grim tesseract-ocr 2>/dev/null || true
     fi
 fi
 if command -v gtk-update-icon-cache >/dev/null 2>&1; then
@@ -177,6 +164,7 @@ build_arch() {
 
     # Copy binary and assets for packaging
     local STAGE="$ARCH_DIR/pkg"
+    mkdir -p "$STAGE"
     install -dm755 "$STAGE/usr/bin"
     install -dm755 "$STAGE/usr/share/applications"
     install -dm755 "$STAGE/usr/share/icons/hicolor/256x256/apps"

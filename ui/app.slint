@@ -27,9 +27,12 @@ export component AppWindow inherits Window {
     callback search-changed(string);     // search text
     callback emoji-category-changed(int); // category index
     callback change-theme(string);
+    callback toggle-ocr(bool);
+    callback open-setup();
     callback close-window();
     callback check-shortcuts();
     callback fix-shortcuts();
+    callback fix-single-shortcut(string);
     callback finish-setup();
 
     // Data models populated by Rust
@@ -39,6 +42,7 @@ export component AppWindow inherits Window {
     in-out property <int> active-tab: 0; // 0 = Clips, 1 = Emojis, 2 = GIFs/Kaomojis
     in-out property <int> active-emoji-category: 0; // 0-8 for emoji categories
     in-out property <bool> is-dark: true;
+    in-out property <bool> enable-ocr: true;
     in-out property <bool> show-setup: false;
     in-out property <int> setup-step: 0; // 0 = Welcome, 1 = Detect/Conflict, 2 = Manual Setup
     in-out property <string> shortcut-status: "detecting"; // "detecting", "conflict", "ok", "failed"
@@ -116,6 +120,7 @@ export component AppWindow inherits Window {
                 
                 check-shortcuts() => { root.check-shortcuts(); }
                 fix-shortcuts() => { root.fix-shortcuts(); }
+                fix-single-shortcut(sc) => { root.fix-single-shortcut(sc); }
                 finish-setup() => { root.finish-setup(); }
             }
 
@@ -453,6 +458,7 @@ export component AppWindow inherits Window {
 
                  if (active-tab == 2) : PreferencesPanel {
                      theme-mode <=> root.theme-mode;
+                     enable-ocr <=> root.enable-ocr;
                      text-color: root.text-color;
                      text-secondary: root.text-secondary;
                      card-bg: root.card-bg;
@@ -461,6 +467,8 @@ export component AppWindow inherits Window {
                      accent-color: root.accent-color;
                      
                      change-theme(theme) => { root.change-theme(theme); }
+                     toggle-ocr(enabled) => { root.toggle-ocr(enabled); }
+                     open-setup() => { root.open-setup(); }
                  }
              }
         }

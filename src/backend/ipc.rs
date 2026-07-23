@@ -15,6 +15,8 @@ pub async fn handle_single_instance(sock_path: &Path, args: &[String]) -> Result
         if let Ok(mut stream) = UnixStream::connect(sock_path).await {
             let cmd = if args.contains(&"--emoji".to_string()) {
                 "emoji"
+            } else if args.contains(&"--ocr".to_string()) {
+                "ocr"
             } else if args.contains(&"--settings".to_string()) {
                 "settings"
             } else {
@@ -34,6 +36,7 @@ pub async fn handle_single_instance(sock_path: &Path, args: &[String]) -> Result
 pub fn spawn_ipc_listener(
     sock_path: &Path,
     app_weak: slint::Weak<crate::AppWindow>,
+    db: std::sync::Arc<parking_lot::Mutex<rusqlite::Connection>>,
 ) {
     let sock_path_clone = sock_path.to_path_buf();
     tokio::spawn(async move {
@@ -41,12 +44,18 @@ pub fn spawn_ipc_listener(
             loop {
                 if let Ok((mut stream, _)) = listener.accept().await {
                     let app_weak_clone = app_weak.clone();
+                    let db_clone = db.clone();
                     tokio::spawn(async move {
                         let mut buf = [0u8; 32];
                         if let Ok(n) = stream.read(&mut buf).await {
                             let cmd = String::from_utf8_lossy(&buf[..n]);
                             let cmd_str = cmd.trim().to_string();
                             
+                            if cmd_str == "ocr" {
+                                crate::backend::ocr::run_ocr_capture_and_ingest(db_clone, app_weak_clone);
+                                return;
+                            }
+
                             // Wake up UI loop
                             slint::invoke_from_event_loop(move || {
                                 if let Some(app) = app_weak_clone.upgrade() {
